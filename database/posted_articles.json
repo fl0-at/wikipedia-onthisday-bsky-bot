@@ -1,0 +1,17 @@
+{
+  "articles": [
+    {
+      "id": "https://en.wikipedia.org/wiki/Special:FeedItem/onthisday/20241215000000/en",
+      "contentList": [
+        {
+          "type": "todayText",
+          "value": "<p><b><a href=\"/wiki/December_15\" title=\"December 15\">December 15</a></b>\n</p>"
+        },
+        {
+          "type": "todayText",
+          "value": "<p><b><a href=\"/wiki/December_15\" title=\"December 15\">December 15</a></b>\n</p>"
+        }
+      ]
+    }
+  ]
+}
