@@ -2,9 +2,14 @@ import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import { Article, Content } from '../classes/classes';
 import { ContentType, LogLevel } from '../utils/enums';
+import parse from 'node-html-parser';
+import { LinkCollection } from '../utils/interfaces';
+dotenv.config();
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const DB = require('../../database/posted_articles.json');
 const LOG_LEVEL = process.env.LOG_LEVEL || LogLevel.INFO;
+const wikiURL = process.env.WIKIPEDIA_MAIN_URL || 'https://en.wikipedia.org';
+log('LOGGER', 'LogLevel is turned to', LOG_LEVEL);
 
 dotenv.config();
 
@@ -17,11 +22,11 @@ async function saveToDb(DB) {
 }
 
 // save posted articles to local file
-async function savePostedArticle(article: Article) {
+async function savePostedArticleWithoutContents(article: Article) {
 	try {
 		// need to just write the "bare" article, without contents
 		const articleWithoutContent = new Article(article.id,[]);
-		log(LogLevel.DEBUG, 'Trying to save bare article to DB:', articleWithoutContent);				
+		log(LogLevel.DEBUG, 'Saving barebones article to DB:', articleWithoutContent);				
 		
 		// if the JSON is still empty, populate it
 		if (DB.articles == undefined || DB === '{}') await fs.writeFile('./database/posted_articles.json', JSON.stringify(JSON.parse('{"articles": []}'), null, 2));
@@ -48,7 +53,7 @@ async function savePostedArticleContent(article: Article, content: Content) {
 		// need to check if to be saved content already exists
 		let isDuplicateContent = false;
 		for (const con of DB.articles[indexForUpdate].contentList) {			
-			if (con === content) isDuplicateContent = true;
+			if (con == content) isDuplicateContent = true;
 		}
 		// for some reason I get duplicate content entries
 		// need to fix!!!
@@ -56,10 +61,11 @@ async function savePostedArticleContent(article: Article, content: Content) {
 			curArt.contentList.push(content)
 		} else {
 			log(LogLevel.WARNING, 'Duplicate content detected - will be skipped:', content.value);
+
 		}
 
-		log(LogLevel.DEBUG, 'Saving the following article ID:', article.id);
-		log(LogLevel.DEBUG, 'Saving the following content list:', DB.articles[indexForUpdate].contentList);
+		log(LogLevel.DEBUG, 'Saving content for article with ID:', article.id);
+		log(LogLevel.TRACE, 'Saving the following content list:', DB.articles[indexForUpdate].contentList);
 
 		DB.articles[indexForUpdate] = curArt;
 		log(LogLevel.TRACE, 'Saving the following DB to local FS:', DB);
@@ -119,6 +125,7 @@ async function loadPostedArticleContent(article: Article): Promise<Content[]> {
 	}
 }
 
+// check if we already posted any content for this article
 async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content) {
 	try {
 		// need to just read that one article
@@ -136,8 +143,52 @@ async function checkIfContentAlreadyPostedForArticle(article: Article, content: 
 	}
 }
 
+// strip all HTML elements of the content
+async function stripHTMLElements(content: string) {
+	let contentRaw = content;
+	
+	// first, replace HTML links with actual links
+	const linkCollection = new Array<LinkCollection>;
+	const aHrefNodes = parse(contentRaw).querySelectorAll('a');
+
+	// create a link collection object so we
+	// don't lose the context of the links
+	for (const aHref of aHrefNodes) {
+		linkCollection.push({
+			text: aHref.innerText,
+			url: wikiURL + aHref.getAttribute('href')
+		});
+		// strip the HTML tags and replace with just the text
+		contentRaw = contentRaw.replace(aHref.toString(), aHref.innerText);
+		log(LogLevel.DEBUG, 'linkText:', aHref.innerText, 'wikiURL:', wikiURL+aHref.getAttribute('href'));
+	}
+
+	// strip all remaining HTML tags
+	
+	//<li>
+	const listHTML = parse(contentRaw).querySelector('li');
+	contentRaw = contentRaw.replace(listHTML.toString(), listHTML.innerHTML);
+
+	//<b>
+	const boldHTMLNodes = parse(contentRaw).querySelectorAll('b');
+	for (const boldNode of boldHTMLNodes) {
+		contentRaw = contentRaw.replace(boldNode.toString(), boldNode.innerHTML);
+	}
+
+	
+	//contentRaw = contentRaw.replace('');
+	contentRaw = contentRaw + ' 🤡 @flo.loeffler.wien ' + '#onthisday';
+		
+	/*****************************************\
+	| we will return raw text and our freshly |
+	| created link collection object in the   |
+	| 		reponse of this function		  |
+	\*****************************************/
+	return { contentRaw, linkCollection };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function log(level: LogLevel, message: string, ...optionalParams: any[] ) {
+async function log(level: LogLevel|string, message: string, ...optionalParams: any[] ) {
 	try {
 		switch (level) {
 			case LogLevel.CRITICAL:
@@ -159,7 +210,7 @@ async function log(level: LogLevel, message: string, ...optionalParams: any[] ) 
 				if (LOG_LEVEL === LogLevel.TRACE) console.debug(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
 				break;
 			default:
-				console.log(`[${new Date().toISOString()}][UNKNOWN] ${message}`, ...optionalParams);
+				console.log(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
 				break;
 		}		
 	} catch (error) {
@@ -169,11 +220,12 @@ async function log(level: LogLevel, message: string, ...optionalParams: any[] ) 
 }
 
 export { 
-	savePostedArticle,
+	savePostedArticleWithoutContents,
 	savePostedArticleContent,
 	loadPostedArticle,
 	loadPostedArticles,
 	loadPostedArticleContent,
 	checkIfContentAlreadyPostedForArticle,
+	stripHTMLElements,
 	log
 };

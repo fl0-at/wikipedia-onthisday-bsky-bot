@@ -84,7 +84,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 // extract todayText on this day
 async function getOnThisDayTodayText(onThisDayArticle: {id: string, title: string, contents: string, link: string}) {
 	const todayNode = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > p');
-	log(LogLevel.DEBUG, 'todayNode:', todayNode.toString());
+	log(LogLevel.TRACE, 'todayNode:', todayNode.toString());
 	// check if there's more than today's date
 
 	let todayText: string|null;
@@ -94,7 +94,7 @@ async function getOnThisDayTodayText(onThisDayArticle: {id: string, title: strin
 	} else {		
 		return todayNode.toString();
 	}	
-	log(LogLevel.TRACE, 'TodayText:', todayText.toString());	
+	log(LogLevel.DEBUG, 'TodayText:', todayText.toString());	
 	return todayText;
 }
 
@@ -111,10 +111,11 @@ async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string
 	} else {		
 		log(LogLevel.INFO, 'For today, there is no holiday info available:', holidayNode.toString())
 		return [];
-	}	
-	log(LogLevel.DEBUG, 'HolidayText:', holidayText.toString());
+	}		
+	log(LogLevel.TRACE, 'HolidayText:', holidayText.toString());
 	const holidays = holidayText.split(', ');
 	const holidayList: Array<string> = [];
+	log(LogLevel.INFO, `Found ${holidays.length} holidays, parsing...`);
 	for (const holiday of holidays) {
 		log(LogLevel.DEBUG, 'Holiday found:', holiday.toString());
 		holidayList.push(holiday.toString());
@@ -130,6 +131,7 @@ async function getOnThisDayEvents(onThisDayArticle: {id: string, title: string, 
 		log(LogLevel.INFO, 'For today, there is no event info available:', eventNodes.toString())
 		return [];
 	}
+	log(LogLevel.INFO, `Found ${eventNodes.length} events, parsing...`);
 	const eventList = [];
 	for (const event of eventNodes) {
 		log(LogLevel.DEBUG, 'Event found:', event.toString());
@@ -146,6 +148,7 @@ async function getOnThisDayAnniversaries(onThisDayArticle: {id: string, title: s
 		log(LogLevel.INFO, 'For today, there is no anniversary info available:', anniversaryNodes.toString())
 		return [];
 	}
+	log(LogLevel.INFO, `Found ${anniversaryNodes.length} anniversaries, parsing...`);
 	const anniversaryList = [];
 	for (const anniversary of anniversaryNodes) {
 		log(LogLevel.DEBUG, 'Anniversary found:', anniversary.toString());

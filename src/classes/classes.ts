@@ -14,6 +14,18 @@ class Article {
 	id: string; 
 	contentList: Content[];
 
+	public toString() {
+		const contents = [];
+		for (const content of this.contentList) {
+			contents.push(content);
+		}
+		const str = {
+			"id": this.id,
+			"contentList": contents
+		}
+		return JSON.stringify(str);
+	}
+
 	constructor(id: string, contentList: Content[]){
 		this.id = id;
 		this.contentList = contentList
