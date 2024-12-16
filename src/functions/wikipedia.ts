@@ -20,7 +20,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 		const feed = await parser.parseURL(ATOM_FEED_URL);
 
 		const currentDate = new Date();
-		const formattedDate = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0, 0)).toISOString();
+		const formattedDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), currentDate.getUTCDate(), 0, 0, 0, 0)).toISOString();
 
 		const filteredArticles = feed.items.filter(item => {
 			try {
@@ -89,8 +89,10 @@ async function getOnThisDayTodayText(onThisDayArticle: {id: string, title: strin
 
 	let todayText: string|null;
 	if (todayNode.toString().includes(':')) {
-		const combinedText = todayNode.toString().split(': ');		
-		todayText = combinedText[0];
+		const combinedText = todayNode.toString().split(': ');
+		// because we are effectively splitting the
+		// <p> node, we need to close the tag again
+		todayText = combinedText[0].replace('\n','') + '</p>';
 	} else {		
 		return todayNode.toString();
 	}	
@@ -107,7 +109,9 @@ async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string
 	let holidayText: string|null;
 	if (holidayNode.toString().includes(':')) {
 		const combinedText = holidayNode.toString().split(': ');		
-		holidayText = combinedText[1];
+		// because we are effectively splitting the
+		// <p> node, we need to add the opening tag
+		holidayText = '<p>' + combinedText[1].replace('\n','');
 	} else {		
 		log(LogLevel.INFO, 'For today, there is no holiday info available:', holidayNode.toString())
 		return [];
@@ -115,7 +119,7 @@ async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string
 	log(LogLevel.TRACE, 'HolidayText:', holidayText.toString());
 	const holidays = holidayText.split(', ');
 	const holidayList: Array<string> = [];
-	log(LogLevel.INFO, `Found ${holidays.length} holidays, parsing...`);
+	log(LogLevel.DEBUG, `Found ${holidays.length} holidays, parsing...`);
 	for (const holiday of holidays) {
 		log(LogLevel.DEBUG, 'Holiday found:', holiday.toString());
 		holidayList.push(holiday.toString());
@@ -131,7 +135,7 @@ async function getOnThisDayEvents(onThisDayArticle: {id: string, title: string, 
 		log(LogLevel.INFO, 'For today, there is no event info available:', eventNodes.toString())
 		return [];
 	}
-	log(LogLevel.INFO, `Found ${eventNodes.length} events, parsing...`);
+	log(LogLevel.DEBUG, `Found ${eventNodes.length} events, parsing...`);
 	const eventList = [];
 	for (const event of eventNodes) {
 		log(LogLevel.DEBUG, 'Event found:', event.toString());
@@ -148,7 +152,7 @@ async function getOnThisDayAnniversaries(onThisDayArticle: {id: string, title: s
 		log(LogLevel.INFO, 'For today, there is no anniversary info available:', anniversaryNodes.toString())
 		return [];
 	}
-	log(LogLevel.INFO, `Found ${anniversaryNodes.length} anniversaries, parsing...`);
+	log(LogLevel.DEBUG, `Found ${anniversaryNodes.length} anniversaries, parsing...`);
 	const anniversaryList = [];
 	for (const anniversary of anniversaryNodes) {
 		log(LogLevel.DEBUG, 'Anniversary found:', anniversary.toString());
@@ -157,4 +161,4 @@ async function getOnThisDayAnniversaries(onThisDayArticle: {id: string, title: s
 	return anniversaryList;
 }
 
-export { fetchOnThisDayArticle, getOnThisDayAnniversaries, getOnThisDayEvents, getOnThisDayHolidays };
+export { fetchOnThisDayArticle, getOnThisDayAnniversaries, getOnThisDayEvents, getOnThisDayHolidays, getOnThisDayTodayText };

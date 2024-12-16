@@ -1,19 +1,27 @@
 import dotenv from "dotenv";
 import { AtpAgent } from '@atproto/api';
 import { LogLevel } from "../utils/enums";
-import { log, stripHTMLElements } from '../functions/utils';
+import { log, prefixText, savePostedArticleContent, stripHTMLElements, savePostToJSON } from '../functions/utils';
 import { RichText } from '@atproto/api';
 import { LinkCollection } from "../utils/interfaces";
-
+import { Article, Content } from "../classes/classes";
 
 dotenv.configDotenv();
+
 const BLUESKY_HANDLE = process.env.BLUESKY_HANDLE!;
 const BLUESKY_PASSWORD = process.env.BLUESKY_PASSWORD!;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false; // check if debug mode is on
 const pds_url = process.env.PDS_URL || 'https://bsky.social';
 const agent = DEBUG_MODE ? null : new AtpAgent({ service: pds_url }); // only initialize when not in debug mode
 
-// log in to Bluesky
+/**
+ * A function that logs your bot in to Bluesky.
+ * Requires a global agent object to be set
+ * 
+ * Read more about this in the atproto API Docs:
+ * https://www.npmjs.com/package/@atproto/api
+ * @returns Promise<void>
+ */
 async function loginToBluesky() {
 	if (DEBUG_MODE) {
 		log(LogLevel.DEBUG, 'Skipping BlueSky login in debug mode...');
@@ -34,38 +42,38 @@ async function loginToBluesky() {
 	}
 }
 
-// post to Bluesky (or just print debug info if DEBUG_MODE is turned on)
-async function postToBluesky(content: string) {
+/**
+ * Function to post a postable Bluesky post object to Bluesky
+ * @param bskyPostObj: {$type: string, text: RichText["text"], facets: RichText["facets"], createdAt: string} 
+ * @returns Promise<void>
+ */
+async function postToBluesky(bskyPostObj: {$type: string, text: RichText["text"], facets: RichText["facets"], createdAt: string}) {
+	// post to Bluesky (or just print debug info if DEBUG_MODE is turned on)
 	if (DEBUG_MODE) {
 		// log what should be posted and skip the actual posting process
-		log(LogLevel.TRACE, 'Received the following content:', content);
-		const stripped = await stripHTMLElements(content);
-		const rawText = stripped["contentRaw"];
-		const links = stripped["linkCollection"];
-		log(LogLevel.TRACE, 'Stripped text:', rawText);
-		const postRecord = await preparePost(rawText, links);
-		log(LogLevel.TRACE, 'Prepared post received:', postRecord);
-		log(LogLevel.INFO, 'Content that would have been posted:', postRecord.text);
+		log(LogLevel.TRACE, 'Received post object:', JSON.stringify(bskyPostObj, null, 2));
+		log(LogLevel.INFO, 'This could have been a Bluesky post:', 'text: "'+bskyPostObj.text+'",', 'createdAt: "'+bskyPostObj.createdAt+'"');
+		await savePostToJSON(bskyPostObj);
 		return;
 	}
-
 	try {
 		if (!agent) throw new Error('Agent is not initialized.');
-		log(LogLevel.TRACE, 'Received the following content:', content);
-		const stripped = await stripHTMLElements(content);
-		const rawText = stripped["contentRaw"];
-		const links = stripped["linkCollection"];
-		log(LogLevel.TRACE, 'Stripped text:', rawText);
-		const postRecord = await preparePost(rawText, links);
-		log(LogLevel.TRACE, 'Prepared post received:', postRecord);
 		log(LogLevel.DEBUG, 'Attempting to post to Bluesky...');
-		const res = await agent.post(postRecord);
+		const res = await agent.post(bskyPostObj);
+		await savePostToJSON(bskyPostObj);
 		log(LogLevel.INFO, 'Post successfully created:', res.uri);
 	} catch (error) {
 		log(LogLevel.WARNING, 'Error posting to BlueSky:', error);
 	}
 }
 
+/**
+ * Prepare the post by auto-detecting facets and also adding custom facets, based on a rawText string and a linkCollection array that implements the LinkCollection interface.
+ * @param rawText Raw text in unicode
+ * @param linkCollection Array of LinkCollection objects that point to specific indices in the raw text
+ * 
+ * @returns a postable Bluesky Post Object
+ */
 async function preparePost(rawText: string, linkCollection: Array<LinkCollection>) {
 	try {
 		log(LogLevel.DEBUG, 'Received raw text:', rawText);
@@ -90,24 +98,6 @@ async function preparePost(rawText: string, linkCollection: Array<LinkCollection
 		// this is necessary because the automatic detector cannot know
 		// which "raw text" should actually be a link
 		// example: 1796 -> https://en.wikipedia.org/wiki/1796
-
-		/*
-			Example facet:
-
-			{
-				"index": {
-					"byteStart": 74,
-					"byteEnd": 108
-				},
-				"features": [
-					{
-						"$type": "app.bsky.richtext.facet#link",
-						"uri": "https://en.wikipedia.org/wiki/CBOR"
-					}
-				]
-			}
-			
-		*/
 
 		// loop through the link collection
 		for (const link of linkCollection) {
@@ -145,10 +135,7 @@ async function preparePost(rawText: string, linkCollection: Array<LinkCollection
 				rt.facets.push(customFacet);
 			}
 
-
-
 		}
-
 
 		const postRecord = {
 			$type: 'app.bsky.feed.post',
@@ -157,7 +144,7 @@ async function preparePost(rawText: string, linkCollection: Array<LinkCollection
 			createdAt: new Date().toISOString(),
 		}
 		log(LogLevel.TRACE, 'Determined facets:', postRecord.facets == undefined ? 'undefined' : JSON.stringify(postRecord.facets, null , 2));
-		log(LogLevel.DEBUG, 'Prepared post, post record:', JSON.stringify(postRecord, null, 2));
+		log(LogLevel.TRACE, 'Prepared post, post record:', JSON.stringify(postRecord, null, 2));
 		return postRecord;
 	} catch (error) {
 		log(LogLevel.WARNING, 'Could not prepare post:', error);
@@ -165,4 +152,39 @@ async function preparePost(rawText: string, linkCollection: Array<LinkCollection
 	}
 }
 
-export { loginToBluesky, postToBluesky };
+/**
+ * 
+ * @param article 
+ * @param content 
+ * @returns true or false, based on whether the post was successful
+ */
+async function sanitizeAndPostContent(article: Article, content: Content) {
+	try {
+		const textToPost = await prefixText(article, content);
+		
+		// clean up the text
+		log(LogLevel.TRACE, 'Text to be cleaned:', textToPost);
+		const stripped = await stripHTMLElements(textToPost);
+		const rawText = stripped["contentRaw"];
+		const links = stripped["linkCollection"];
+		log(LogLevel.TRACE, 'Stripped text:', rawText);
+
+		// prepare for posting
+		const postRecord = await preparePost(rawText, links);
+		log(LogLevel.TRACE, 'Prepared post received:', JSON.stringify(postRecord, null, 2));
+		
+		// post the to Bluesky			
+		await postToBluesky(postRecord);
+		log(LogLevel.TRACE, 'Content posted:', JSON.stringify(postRecord, null, 2));
+
+		// save posted content to article
+		await savePostedArticleContent(article, content);	
+	} catch (error) {
+		log(LogLevel.ERROR, 'Failed to sanitize post content:', error);
+		return false;		
+	}
+	
+	return true;
+}
+
+export { loginToBluesky, preparePost, sanitizeAndPostContent, postToBluesky };
