@@ -3,15 +3,18 @@ import schedule from 'node-schedule';
 import { LogLevel, ContentType } from './utils/enums';
 import { loginToBluesky, sanitizeAndPostContent } from './functions/bluesky';
 import { fetchOnThisDayArticle } from './functions/wikipedia';
-import { checkIfContentAlreadyPostedForArticle, loadPostedArticles, savePostedArticleWithoutContents, savePostedArticleContent, log } from './functions/utils';
+import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithoutContents, saveArticleContent, log } from './functions/utils';
 
 // load environment variables
 dotenv.config();
 
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 
-// main functionality
-async function runBot() {
+/**
+ * Main function that runs the bot
+ * @returns {Promise<void>}
+ */
+async function runBot(): Promise<void> {
 	try {
 		log(LogLevel.INFO, 'Bot started...');
 		if (!DEBUG_MODE) await loginToBluesky();
@@ -19,7 +22,7 @@ async function runBot() {
 		log(LogLevel.DEBUG, 'Fetching Atom feed...');
 		const articleOfToday = await fetchOnThisDayArticle();
 		log(LogLevel.DEBUG, 'Loading already posted articles...');
-		const postedArticles = await loadPostedArticles();
+		const postedArticles = await loadArticles();
 		log(LogLevel.TRACE, 'Posted articles loaded:', postedArticles);
 		// check if the article of the day is already in our DB
 		if (!postedArticles || !JSON.stringify(postedArticles).includes(articleOfToday.id)) {
@@ -31,7 +34,7 @@ async function runBot() {
 
 			// save article (without contents) to local file
 			// we just need to create a bare entry first
-			await savePostedArticleWithoutContents(articleOfToday);
+			await saveArticleWithoutContents(articleOfToday);
 
 			// initialize index at 0
 			let firstRealContent = 0;
@@ -41,7 +44,7 @@ async function runBot() {
 					case ContentType.todayText:
 						// if the content is of type "todayText"
 						// save this text to our json file
-						await savePostedArticleContent(articleOfToday, articleOfToday.contentList[firstRealContent]);
+						await saveArticleContent(articleOfToday, articleOfToday.contentList[firstRealContent]);
 						// ...and increment our index value:
 						firstRealContent++;
 						break;
@@ -93,7 +96,7 @@ async function runBot() {
 					break;
 				}
 
-				if (!alreadyPosted && content.type === ContentType.todayText) await savePostedArticleContent(articleOfToday, content);
+				if (!alreadyPosted && content.type === ContentType.todayText) await saveArticleContent(articleOfToday, content);
 			}
 
 			// if all content of today has been posted, just log an info message			
@@ -104,8 +107,6 @@ async function runBot() {
 	}
 	log(LogLevel.INFO, 'Bot stopped...');
 }
-
-
 
 // schedule a job
 if (DEBUG_MODE === true) {

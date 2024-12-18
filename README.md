@@ -15,10 +15,19 @@ A Bluesky bot that posts the "on this day" articles from Wikipedia on Bluesky
 - `WIKIPEDIA_MAIN_URL`
   - The wikipedia URL used for prefixing `/wiki/SomeArticle` URIs
   - defaults to `https://en.wikipedia.org` if not explicitly set
+- `DB_PATH`
+  - The path where you want to locally save the extracted HTML from the Atom feed as well as the content posted to Bluesky
+  - defaults to `./database` if not explicitely set
+- `ARTICLES_FILENAME`
+  - The name of the file where the extracted articles from the Atom feed are stored
+  - defaults to `articles.json` if not explicitely set
+- `POSTINGS_FILENAME`
+  - The name of the file where the content posted to Bluesky will be stored
+  - defaults to `postings.json` if not explicitely set
 - `DEBUG_MODE`
   - if enabled, the app will not try logging in to Bluesky and just output the potential posts to the console
   - defaults to `false` if not explicitly set
 - `LOG_LEVEL`
   - which logs to write to the console
-  - Supported values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+  - Supported values: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
   - defaults to `INFO` if not explicitly set
