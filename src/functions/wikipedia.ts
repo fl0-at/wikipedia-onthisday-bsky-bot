@@ -7,7 +7,7 @@ import { log } from '../functions/utils';
 import { LogLevel, ContentType } from '../utils/enums';
 dotenv.config();
 
-const ATOM_FEED_URL = process.env.RSS_FEED_URL!;
+const ATOM_FEED_URL = process.env.RSS_FEED_URL! || 'https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom';
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 
 // load the atom feed

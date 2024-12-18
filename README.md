@@ -11,6 +11,7 @@ A Bluesky bot that posts the "on this day" articles from Wikipedia on Bluesky
   - defaults to `https://bsky.social` if not explicitly set
 - `RSS_FEED_URL`
   - The feed URL of the Atom/RSS Feed you want to parse
+  - defaults to `https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom` if not set
 - `WIKIPEDIA_MAIN_URL`
   - The wikipedia URL used for prefixing `/wiki/SomeArticle` URIs
   - defaults to `https://en.wikipedia.org` if not explicitly set
