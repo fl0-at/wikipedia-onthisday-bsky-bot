@@ -17,6 +17,7 @@ const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 async function runBot(): Promise<void> {
 	try {
 		log(LogLevel.INFO, 'Bot started...');
+		log(LogLevel.DEBUG, 'Initializing agent...');
 		if (!DEBUG_MODE) await loginToBluesky();
 
 		log(LogLevel.DEBUG, 'Fetching Atom feed...');

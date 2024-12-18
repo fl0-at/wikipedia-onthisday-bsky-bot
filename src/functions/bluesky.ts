@@ -10,17 +10,20 @@ dotenv.configDotenv();
 
 const BLUESKY_HANDLE = process.env.BLUESKY_HANDLE!;
 const BLUESKY_PASSWORD = process.env.BLUESKY_PASSWORD!;
-const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false; // check if debug mode is on
-const pds_url = process.env.PDS_URL || 'https://bsky.social';
-const agent = DEBUG_MODE ? null : new AtpAgent({ service: pds_url }); // only initialize when not in debug mode
+// check if debug mode is on
+const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false; 
+const PDS_URL = process.env.PDS_URL || 'https://bsky.social';
+// only initialize an agent when not in debug mode
+const agent = DEBUG_MODE ? null : new AtpAgent({ service: PDS_URL });
 
 /**
  * A function that logs your bot in to Bluesky.
  * Requires a global agent object to be set
+ *  
+ * @returns {Promise<void>} a void Promise that resolves when the login is successful
  * 
  * Read more about this in the atproto API Docs:
  * https://www.npmjs.com/package/@atproto/api
- * @returns {Promise<void>}
  */
 async function loginToBluesky(): Promise<void> {
 	if (DEBUG_MODE) {
