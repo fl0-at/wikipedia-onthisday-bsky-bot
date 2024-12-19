@@ -27,7 +27,7 @@ A Bluesky bot that posts the "on this day" articles from Wikipedia on Bluesky
 - `POST_ONCE_ONLY`
   - if enabled, the bot will only run once and try to post to Bluesky
   - defaults to `false` if not explicitly set
-  - _**NOTE:** if `DEBUG_MODE` is set to `true`, this overrides this setting!_
+  - _**NOTE:** if `DEBUG_MODE` is set to `true`, the debug mode overrides this setting!_
 - `DEBUG_MODE`
   - if enabled, the app will not try logging in to Bluesky and just output the potential posts to the console
   - defaults to `false` if not explicitly set
