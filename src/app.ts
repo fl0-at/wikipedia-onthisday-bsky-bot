@@ -61,7 +61,7 @@ async function runBot(): Promise<void> {
 
 			// no need to loop through article contents
 			// just post the first entry since the article did not exist in our DB
-			log(LogLevel.INFO, 'Posting first content for article:', articleOfToday.id);
+			log(LogLevel.INFO, 'Preparing first postable content for article:', articleOfToday.id);
 			log(LogLevel.TRACE, 'Article:', articleOfToday);
 
 			// need to call function to sanitize post content
@@ -84,7 +84,7 @@ async function runBot(): Promise<void> {
 				if (!alreadyPosted && content.type != ContentType.todayText) {
 
 					// new content, so post this
-					log(LogLevel.INFO, 'Posting new content for article:', articleOfToday.id);
+					log(LogLevel.INFO, 'Preparing new postable content for article:', articleOfToday.id);
 					freshContentFound = true;
 
 					// need to call function to sanitize post content

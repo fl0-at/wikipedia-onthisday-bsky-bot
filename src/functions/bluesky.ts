@@ -1,8 +1,9 @@
 import dotenv from "dotenv";
-import { AtpAgent } from '@atproto/api';
+import { AtpAgent, Facet } from '@atproto/api';
 import { LogLevel } from "../utils/enums";
 import { log, prefixText, saveArticleContent, stripHTMLElements, savePostToJSON } from '../functions/utils';
 import { RichText } from '@atproto/api';
+import { UnicodeString } from "@atproto/api";
 import { Link } from "../utils/interfaces";
 import { Article, BlueskyPost, Content } from "../classes/classes";
 
@@ -23,7 +24,9 @@ const agent = DEBUG_MODE ? null : new AtpAgent({ service: PDS_URL });
  * @returns {Promise<void>} a void Promise that resolves when the login is successful
  * 
  * Read more about this in the atproto API Docs:
- * https://www.npmjs.com/package/@atproto/api
+ * @see https://www.npmjs.com/package/@atproto/api
+ * @see https://docs.bsky.app/docs/advanced-guides/atproto
+ * @see https://atproto.com/
  */
 async function loginToBluesky(): Promise<void> {
 	if (DEBUG_MODE) {
@@ -93,7 +96,7 @@ async function preparePost(rawText: string, linkCollection: Array<Link>): Promis
 		if (agent && agent != null) {
 			// automatically detects mentions and links
 			await rt.detectFacets(agent);
-			log(LogLevel.DEBUG, 'Detecting facets...');
+			log(LogLevel.INFO, 'Detecting facets...');
 		} else {
 			log(LogLevel.DEBUG, 'Skipping automatic facet detection...');
 		}
@@ -106,11 +109,44 @@ async function preparePost(rawText: string, linkCollection: Array<Link>): Promis
 		// loop through the link collection
 		for (const link of linkCollection) {
 			// find start and end index of the link text
-			const start = rt.text.indexOf(link.text);
-			const end = start + link.text.length;
+			/**
+			 * According to the Bluesky docs, we need to convert this string from a UTF-16 string to a UTF-8 string
+			 * 
+			 * @type {UnicodeString} unicodeFullText - The entire posts text in UTF-8
+			 * 
+			 * @see https://docs.bsky.app/docs/advanced-guides/post-richtext#text-encoding-and-indexing			
+			 * 
+			 */
+			const unicodeFullText: UnicodeString = new UnicodeString(rt.text);
+			/**
+			 * According to the Bluesky docs, we need to convert this string from a UTF-16 string to a UTF-8 string
+			 * 
+			 * @type {UnicodeString} unicodeLinkText - The link text in UTF-8
+			 * 
+			 * @see https://docs.bsky.app/docs/advanced-guides/post-richtext#text-encoding-and-indexing			
+			 */
+			const unicodeLinkText: UnicodeString = new UnicodeString(link.text);
+			/**
+			 * We are making use of the utf16IndexToUtf8Index method to convert the UTF-16 index to a UTF-8 index
+			 * 
+			 * @type {number} start - The start index of the link text
+			 * 
+			 * @see https://github.com/bluesky-social/atproto/blob/main/packages/api/src/rich-text/unicode.ts
+			 * 
+			 */
+			const start: number = unicodeFullText.utf16IndexToUtf8Index(rt.text.indexOf(link.text));
+			const end: number = start + unicodeLinkText.length;
+			
 
-			// let's construct our custom facet:
-			const customFacet = {
+			/**
+			 * This is the custom facet object that we will append to the facet list of our rich text object
+			 * 
+			 * @type {Facet} customFacet - The custom facet object
+			 * 
+			 * @see https://docs.bsky.app/docs/advanced-guides/post-richtext#rich-text-facets
+			 * @see https://github.com/bluesky-social/atproto/blob/main/lexicons/app/bsky/richtext/facet.json
+			 */
+			const customFacet: Facet = {
 				"index": {
 					"byteStart": start,
 					"byteEnd": end
