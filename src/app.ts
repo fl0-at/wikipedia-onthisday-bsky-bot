@@ -9,6 +9,7 @@ import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithout
 dotenv.config();
 
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
+const POST_ONCE_ONLY = process.env.POST_ONCE_ONLY === 'true' || false;
 
 /**
  * Main function that runs the bot
@@ -109,10 +110,12 @@ async function runBot(): Promise<void> {
 	log(LogLevel.INFO, 'Bot stopped...');
 }
 
+log(LogLevel.DEBUG, 'DEBUG_MODE is', DEBUG_MODE);
+
 // schedule a job
 if (DEBUG_MODE === true) {
 	// schedule bot to run once per minute in debug mode
-	log(LogLevel.DEBUG, 'DEBUG_MODE is', DEBUG_MODE);
+	
 	log(LogLevel.INFO, 'Scheduling bot to run every 15 seconds...');
 	schedule.scheduleJob('*/15 * * * * *', () => {
 		log(LogLevel.INFO, 'Job has been triggered...');
@@ -120,10 +123,14 @@ if (DEBUG_MODE === true) {
 	});
 } else {
 	// otherwise schedule bot to run every other hour
-	log(LogLevel.DEBUG, 'DEBUG_MODE is', DEBUG_MODE);
-	log(LogLevel.INFO, 'Scheduling bot to run every other hour...');
-	schedule.scheduleJob('0 */2 * * *', () => {
-		log(LogLevel.INFO, 'Job has been triggered...');
+	if (!POST_ONCE_ONLY) {
+		log(LogLevel.INFO, 'Scheduling bot to run every other hour...');
+		schedule.scheduleJob('0 */2 * * *', () => {
+			log(LogLevel.INFO, 'Job has been triggered...');
+			runBot();
+		});
+	} else {
+		log(LogLevel.INFO, 'Running bot once only...');
 		runBot();
-	});
+	}
 }
