@@ -5,13 +5,17 @@ import { parse } from 'node-html-parser';
 import { Article, Content } from '../classes/classes';
 import { log } from '../functions/utils';
 import { LogLevel, ContentType } from '../utils/enums';
+import { OnThisDayArticle } from '../utils/interfaces';
 dotenv.config();
 
 const WIKIPEDIA_MAIN_URL = process.env.WIKIPEDIA_MAIN_URL! || 'https://en.wikipedia.org';
 const ATOM_FEED_URL = process.env.RSS_FEED_URL! || '/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom';
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 
-// load the atom feed
+/**
+ * Fetches the Wikipedia On This Day article for today
+ * @returns {Promise<Article|null>} a Promise that resolves with an Article object or null
+ */
 async function fetchOnThisDayArticle(): Promise<Article|null> {
 	if (DEBUG_MODE) log(LogLevel.DEBUG, 'fetchOnThisDayArticles called');
 	const parser = new RSSParser();
@@ -82,8 +86,12 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 	}
 }
 
-// extract todayText on this day
-async function getOnThisDayTodayText(onThisDayArticle: {id: string, title: string, contents: string, link: string}) {
+/**
+ * Extracts the text of the "On This Day" article for today
+ * @param {OnThisDayArticle} onThisDayArticle 
+ * @returns {Promise<string>} a Promise that resolves with the text of the "On This Day" article
+ */
+async function getOnThisDayTodayText(onThisDayArticle: OnThisDayArticle): Promise<string> {
 	const todayNode = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > p');
 	log(LogLevel.TRACE, 'todayNode:', todayNode.toString());
 	// check if there's more than today's date
@@ -101,8 +109,12 @@ async function getOnThisDayTodayText(onThisDayArticle: {id: string, title: strin
 	return todayText;
 }
 
-// extract info about holidays on this day
-async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string, contents: string, link: string}) {
+/**
+ * Extracts the holidays from the "On This Day" article for today
+ * @param {OnThisDayArticle} onThisDayArticle 
+ * @returns {Promise<string[]>} a Promise that resolves with an array of holiday strings
+ */
+async function getOnThisDayHolidays(onThisDayArticle: OnThisDayArticle): Promise<string[]> {
 	const holidayNode = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > p');
 	log(LogLevel.TRACE, 'holidayNode:', holidayNode.toString());
 	// check if there's more than today's date
@@ -128,8 +140,12 @@ async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string
 	return holidayList;
 }
 
-// extract info about events that historically took place on this day
-async function getOnThisDayEvents(onThisDayArticle: {id: string, title: string, contents: string, link: string}) {
+/**
+ * Extracts the events from the "On This Day" article for today
+ * @param {OnThisDayArticle} onThisDayArticle 
+ * @returns {Promise<string[]>} a Promise that resolves with an array of event strings
+ */
+async function getOnThisDayEvents(onThisDayArticle: OnThisDayArticle): Promise<string[]> {
 	const eventNodes = parse(onThisDayArticle.contents).querySelectorAll('.mw-parser-output > ul > li');
 	log(LogLevel.TRACE, 'eventNodes:', eventNodes.toString());
 	if (eventNodes.length == 0) {
@@ -145,8 +161,12 @@ async function getOnThisDayEvents(onThisDayArticle: {id: string, title: string, 
 	return eventList;
 }
 
-// extract info about anniversaries on this day
-async function getOnThisDayAnniversaries(onThisDayArticle: {id: string, title: string, contents: string, link: string}) {
+/**
+ * Extracts the anniversaries from the "On This Day" article for today
+ * @param {OnThisDayArticle} onThisDayArticle 
+ * @returns {Promise<string[]>} a Promise that resolves with an array of anniversary strings
+ */
+async function getOnThisDayAnniversaries(onThisDayArticle: OnThisDayArticle): Promise<string[]> {
 	const anniversaryNodes = parse(onThisDayArticle.contents).querySelectorAll('div.mw-parser-output > div.hlist:not(.otd-footer):not(.inline) > ul > li');
 	log(LogLevel.TRACE, 'anniversaryNodes:', anniversaryNodes.toString());
 	if (anniversaryNodes.length == 0) {

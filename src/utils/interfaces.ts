@@ -22,11 +22,18 @@ interface Articles {
 
 /**
  * An interface for a postings object
- * @interface Postings
+ * @interface Posts
  * @property {BlueskyPost[]} postings - The list of posts
  */
-interface Postings {
+interface Posts {
 	postings: Array<BlueskyPost>;
 }
 
-export { Link, Articles, Postings };
+interface OnThisDayArticle {
+	id: string;
+	title: string;
+	contents: string; 
+	link: string;
+}
+
+export { Link, Articles, Posts, OnThisDayArticle };

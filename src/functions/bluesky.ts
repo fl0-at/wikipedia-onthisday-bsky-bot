@@ -50,7 +50,7 @@ async function loginToBluesky(): Promise<void> {
 
 /**
  * Function to post a postable Bluesky post object to Bluesky
- * @param {BlueskyPost} bskyPostObj - The postable Bluesky post object 
+ * @param {BlueskyPost} post - The postable Bluesky post object 
  * @returns {Promise<void>}
  */
 async function postToBluesky(post: BlueskyPost): Promise<void> {

@@ -1,10 +1,10 @@
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import fsSync from 'fs';
+import parse from 'node-html-parser';
 import { Article, BlueskyPost, Content } from '../classes/classes';
 import { ContentType, LogLevel } from '../utils/enums';
-import parse from 'node-html-parser';
-import { Link, Articles, Postings } from '../utils/interfaces';
+import { Link, Articles, Posts } from '../utils/interfaces';
 dotenv.config();
 
 const DB_PATH = process.env.DB_PATH || './database';
@@ -14,12 +14,29 @@ const LOG_LEVEL = process.env.LOG_LEVEL || LogLevel.INFO;
 const LOG_DIR = process.env.LOG_DIR || './logs';
 const LOG_NAME = process.env.LOG_NAME || 'wikipedia-otd-bsky-bot';
 const LOG_TO_FILE = process.env.LOG_TO_FILE || false;
-const wikiURL = process.env.WIKIPEDIA_MAIN_URL || 'https://en.wikipedia.org';
+const WIKI_URL = process.env.WIKIPEDIA_MAIN_URL || 'https://en.wikipedia.org';
+
+log("INIT", 'Initializing', JSON.parse(fsSync.readFileSync('package.json', 'utf-8')).name + ' v' + JSON.parse(fsSync.readFileSync('package.json', 'utf-8')).version);
 log('LOGGER', 'LogLevel is turned to', LOG_LEVEL);
 
 dotenv.config();
 
-async function initializeDb() {
+/**
+ * @typedef {import('../classes/classes').Article} Article
+ * @typedef {import('../classes/classes').Content} Content
+ * @typedef {import('../classes/classes').BlueskyPost} BlueskyPost
+ * @typedef {import('../utils/interfaces').Link} Link
+ * @typedef {import('../utils/interfaces').Articles} Articles
+ * @typedef {import('../utils/interfaces').Posts} Posts
+ * @typedef {import('../utils/enums').LogLevel} LogLevel
+ * @typedef {import('../utils/enums').ContentType} ContentType
+ */
+
+/**
+ * Initialize the articles database
+ * @returns {Promise<void>}
+ */
+async function initializeDb(): Promise<void> {
 	try {
 		log(LogLevel.DEBUG, 'Initializing DB...');
 		await fs.writeFile(
@@ -37,7 +54,11 @@ async function initializeDb() {
 	}
 }
 
-async function loadFromDb() {
+/**
+ * Load the articles database
+ * @returns {Promise<Articles>}
+ */
+async function loadFromDb(): Promise<Articles> {
 	try {
 		const fileContent: string = await fs.readFile(DB_PATH + '/' + ARTICLES_FILENAME, 'utf-8');
 
@@ -59,7 +80,12 @@ async function loadFromDb() {
 
 }
 
-async function saveToDb(DB) {
+/**
+ * Save the articles database
+ * @param {Articles} DB - The articles database
+ * @returns {Promise<void>}
+ */
+async function saveToDb(DB: Articles): Promise<void> {
 	try {
 		await fs.writeFile(DB_PATH + '/' + ARTICLES_FILENAME, JSON.stringify(DB, null, 2), 'utf-8');
 	} catch (error) {
@@ -67,8 +93,12 @@ async function saveToDb(DB) {
 	}
 }
 
-// save posted articles to local file
-async function saveArticleWithoutContents(article: Article) {
+/**
+ * Save the article without contents to the database
+ * @param {Article} article 
+ * @returns {Promise<void>}
+ */
+async function saveArticleWithoutContents(article: Article): Promise<void> {
 	try {
 		// need to just write the "bare" article, without contents
 		const articleWithoutContent: Article = new Article(article.id, []);
@@ -95,8 +125,13 @@ async function saveArticleWithoutContents(article: Article) {
 	}
 }
 
-// save posted content of article to local file
-async function saveArticleContent(article: Article, content: Content) {
+/**
+ * Save the article content to the database
+ * @param {Article} article 
+ * @param {Content} content 
+ * @returns {Promise<void>}
+ */
+async function saveArticleContent(article: Article, content: Content): Promise<void> {
 	try {
 
 		// load the DB
@@ -133,7 +168,10 @@ async function saveArticleContent(article: Article, content: Content) {
 	}
 }
 
-// load list of already posted articles from local file
+/**
+ * Load all articles from the database
+ * @returns {Promise<Article[]>}
+ */
 async function loadArticles(): Promise<Article[]> {
 	try {
 
@@ -151,7 +189,11 @@ async function loadArticles(): Promise<Article[]> {
 	}
 }
 
-// load already posted article from local file
+/**
+ * Load a single article from the database
+ * @param {string} id 
+ * @returns {Promise<Article>}
+ */
 async function loadArticle(id: string): Promise<Article> {
 	try {
 
@@ -170,7 +212,11 @@ async function loadArticle(id: string): Promise<Article> {
 	}
 }
 
-// load list of already posted contents of article from local file
+/**
+ * Load the article content from the database
+ * @param {Article} article 
+ * @returns {Promise<Content[]>}
+ */
 async function loadArticleContent(article: Article): Promise<Content[]> {
 	try {
 		// need to just read that one article
@@ -188,7 +234,12 @@ async function loadArticleContent(article: Article): Promise<Content[]> {
 	}
 }
 
-// check if we already posted any content for this article
+/**
+ * Check if the content has already been posted for the article
+ * @param {Article} article 
+ * @param {Content} content 
+ * @returns 
+ */
 async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content) {
 	try {
 		// need to just read that one article
@@ -209,8 +260,12 @@ async function checkIfContentAlreadyPostedForArticle(article: Article, content: 
 	}
 }
 
-// strip all HTML elements of the content and decorate the text
-async function stripHTMLElementsAndDecorateText(content: string) {
+/**
+ * Strip the HTML elements from content and decorate text
+ * @param {string} content 
+ * @returns {Promise<{contentRaw: string, linkCollection: Link[]}>}
+ */
+async function stripHTMLElementsAndDecorateText(content: string): Promise<{ contentRaw: string; linkCollection: Link[]; }> {
 	let contentRaw = content;
 
 	// first, create a link collection object so we
@@ -223,11 +278,11 @@ async function stripHTMLElementsAndDecorateText(content: string) {
 	for (const aHref of aHrefNodes) {
 		linkCollection.push({
 			text: aHref.innerText,
-			url: wikiURL + aHref.getAttribute('href')
+			url: WIKI_URL + aHref.getAttribute('href')
 		});
 		// strip the HTML tags and replace with just the text
 		contentRaw = contentRaw.replace(aHref.toString(), aHref.innerText);
-		log(LogLevel.DEBUG, 'linkText:', aHref.innerText, 'wikiURL:', wikiURL + aHref.getAttribute('href'));
+		log(LogLevel.DEBUG, 'linkText:', aHref.innerText, 'WIKI_URL:', WIKI_URL + aHref.getAttribute('href'));
 	}
 
 	// strip weird characters
@@ -318,8 +373,13 @@ async function stripHTMLElementsAndDecorateText(content: string) {
 	return { contentRaw, linkCollection };
 }
 
-// prefix the potential post with todayText
-async function prefixText(article: Article, content: Content) {
+/**
+ * Prefix the text with the "todayText"
+ * @param {Article} article 
+ * @param {Content} content 
+ * @returns {Promise<string>}
+ */
+async function prefixText(article: Article, content: Content): Promise<string> {
 	/********************************************************\
 	** POST PREFIXER 												**
 	** ---------------------------------------------------- **
@@ -370,23 +430,12 @@ async function prefixText(article: Article, content: Content) {
 }
 
 /**
- * Decorates the text with lots of unicode emojis
- * 
- * NOT YET IMPLEMENTED, WILL SIMPLY RETURN INPUT WITHOUT CHANGES
- *  
- * @param text the text you want to decorate
+ * Decorates the text and replaces certain placeholders with emojis
+ * and other decorations
+ * @param {string} text the text you want to decorate
+ * @returns {Promise<string>} the decorated text
  */
-async function decorateText(text: string) {
-	//---------------------------------------------//
-	// TO DO: 	Create a decorator function to put //
-	// 			some nice emojis into our text	   //
-	//			-> that should be easy, i.e		   //
-	//			-> inserting some emojis after	   //
-	//			-> certain keywords like "France"  //
-	//			--------------> French flag emoji  //
-	//			-> maybe also the calendar emoji   //
-	//			-> with the current date selected? //
-	//---------------------------------------------//
+async function decorateText(text: string): Promise<string> {
 	let decoratedText = text.replace('<<CALENDAR>> ', '📅 ');
 	decoratedText = decoratedText.replace('<<BORN>>', '🚼');
 	decoratedText = decoratedText.replace('<<DIED>>', '✝');
@@ -397,7 +446,7 @@ async function decorateText(text: string) {
 async function savePostToJSON(newPost: BlueskyPost) {
 	try {
 		// load the saved postings file if it exists
-		const pFromFile: Postings = JSON.parse((await fs.readFile(DB_PATH + '/' + POSTS_FILENAME)).toString());
+		const pFromFile: Posts = JSON.parse((await fs.readFile(DB_PATH + '/' + POSTS_FILENAME)).toString());
 		const pArr: Array<BlueskyPost> = [];
 		if (pFromFile.postings.length > 0) {
 			const postings: Array<BlueskyPost> = pFromFile.postings;
@@ -425,8 +474,15 @@ async function savePostToJSON(newPost: BlueskyPost) {
 	}
 }
 
+/**
+ * Log a message to the console and optionally to a file
+ * @param {LogLevel | string} level - The log level
+ * @param {string} message - The message to log
+ * @param {any[]} optionalParams - Optional parameters
+ * @returns {Promise<void>}
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function log(level: LogLevel | string, message: string, ...optionalParams: any[]) {
+async function log(level: LogLevel | string, message: string, ...optionalParams: any[]): Promise<void> {
 	try {
 		const now = new Date().toISOString();
 		const today = now.split('T')[0];
@@ -482,10 +538,15 @@ async function log(level: LogLevel | string, message: string, ...optionalParams:
 	} catch (error) {
 		throw new Error(`Unable to log either to console or to file: [${new Date().toISOString()}] ${error}`);
 	}
-	return true;
+	return;
 }
 
-function verifyCronNotation(cron: string) {
+/**
+ * Verify the cron notation
+ * @param {string} cron - The cron schedule
+ * @returns {boolean}
+ */
+function verifyCronNotation(cron: string): boolean {
 	if (cron === '' || cron === undefined || cron === null) {
 		log(LogLevel.WARNING, 'Empty cron schedule detected!');
 		log(LogLevel.WARNING, 'Using default values instead...');
