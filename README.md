@@ -35,12 +35,12 @@ This app depends on a couple of environment variables. Some are required in orde
 - `PDS_URL`
   - The PDS your bot resides on
   - defaults to `https://bsky.social` if not explicitly set
+- `WIKIPEDIA_MAIN_URL`
+  - The wikipedia URL used for prefixing the `RSS_FEED_URL` as well as `/wiki/SomeArticle` URIs
+  - defaults to `https://en.wikipedia.org` if not explicitly set
 - `RSS_FEED_URL`
   - The feed URL of the Atom/RSS Feed you want to parse
-  - defaults to `https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom` if not set
-- `WIKIPEDIA_MAIN_URL`
-  - The wikipedia URL used for prefixing `/wiki/SomeArticle` URIs
-  - defaults to `https://en.wikipedia.org` if not explicitly set
+  - defaults to `/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom` if not set
 - `DB_PATH`
   - The path where you want to locally save the extracted HTML from the Atom feed as well as the content posted to Bluesky
   - defaults to `./database` if not explicitly set

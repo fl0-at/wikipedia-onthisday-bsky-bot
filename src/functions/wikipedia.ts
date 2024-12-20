@@ -7,7 +7,8 @@ import { log } from '../functions/utils';
 import { LogLevel, ContentType } from '../utils/enums';
 dotenv.config();
 
-const ATOM_FEED_URL = process.env.RSS_FEED_URL! || 'https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom';
+const WIKIPEDIA_MAIN_URL = process.env.WIKIPEDIA_MAIN_URL! || 'https://en.wikipedia.org';
+const ATOM_FEED_URL = process.env.RSS_FEED_URL! || '/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom';
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 
 // load the atom feed
@@ -16,8 +17,8 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 	const parser = new RSSParser();
 
 	try {
-		log(LogLevel.DEBUG, 'Fetching feed from:', ATOM_FEED_URL);
-		const feed = await parser.parseURL(ATOM_FEED_URL);
+		log(LogLevel.DEBUG, 'Fetching feed from:', WIKIPEDIA_MAIN_URL + ATOM_FEED_URL);
+		const feed = await parser.parseURL(WIKIPEDIA_MAIN_URL + ATOM_FEED_URL);
 
 		const currentDate = new Date();
 		const formattedDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), currentDate.getUTCDate(), 0, 0, 0, 0)).toISOString();
