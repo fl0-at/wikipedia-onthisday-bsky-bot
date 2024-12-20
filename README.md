@@ -42,7 +42,7 @@ This app depends on a couple of environment variables. Some are required in orde
   - defaults to `22` if not explicitly set
 - `CRON_SCHEDULE`
   - you can define the schedule based on [node-schedule cron notation][3] with this variable
-  - 5 to 7 digit cron notation is supported
+  - 5 and 6 digit cron notation is supported
   - example: `* 30 */2 * *` => every 2nd hour at 30 minutes past the hour
   - defaults to `0 */2 * * *` => every 2nd hour
   - _**NOTE:** if you supply an invalid cron schedule, the default value will be used!_
