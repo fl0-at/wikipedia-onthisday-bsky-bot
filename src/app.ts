@@ -3,13 +3,17 @@ import schedule from 'node-schedule';
 import { LogLevel, ContentType } from './utils/enums';
 import { loginToBluesky, sanitizeAndPostContent } from './functions/bluesky';
 import { fetchOnThisDayArticle } from './functions/wikipedia';
-import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithoutContents, saveArticleContent, log } from './functions/utils';
+import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithoutContents, saveArticleContent, log, verifyCronNotation } from './functions/utils';
 
 // load environment variables
 dotenv.config();
 
 const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 const POST_ONCE_ONLY = process.env.POST_ONCE_ONLY === 'true' || false;
+const EARLIEST_START_HOUR = Number(process.env.EARLIEST_START_HOUR) || 6;
+const LATEST_START_HOUR = Number(process.env.LATEST_START_HOUR) || 22;
+const CRON_SCHEDULE = (verifyCronNotation(process.env.CRON_SCHEDULE)? process.env.CRON_SCHEDULE : '0 */2 * * *') || '0 */2 * * *';
+const DEBUG_CRON_SCHEDULE = (verifyCronNotation(process.env.DEBUG_CRON_SCHEDULE)? process.env.DEBUG_CRON_SCHEDULE : '*/15 * * * * *') || '*/15 * * * * *';
 
 /**
  * Main function that runs the bot
@@ -111,13 +115,23 @@ async function runBot(): Promise<void> {
 }
 
 log(LogLevel.INFO, 'DEBUG_MODE is', DEBUG_MODE);
+log(LogLevel.INFO, 'Bot is configured to run only from', (EARLIEST_START_HOUR<10?'0'+EARLIEST_START_HOUR:EARLIEST_START_HOUR)+':00', 'to', LATEST_START_HOUR+':00')
 log(LogLevel.DEBUG, 'POST_ONCE_ONLY is', POST_ONCE_ONLY);
 // schedule a job
 if (DEBUG_MODE === true) {
 	// schedule bot to run once per minute in debug mode
-	
-	log(LogLevel.INFO, 'Scheduling bot to run every 15 seconds...');
-	schedule.scheduleJob('*/15 * * * * *', () => {
+	log(LogLevel.INFO, 'Scheduling bot to run using the following DEBUG cron schedule:', DEBUG_CRON_SCHEDULE);
+	schedule.scheduleJob(DEBUG_CRON_SCHEDULE, () => {
+		log(LogLevel.DEBUG, 'Current time:', new Date().toLocaleString());
+		log(LogLevel.DEBUG, 'Current hour:', new Date().getHours());
+		log(LogLevel.DEBUG, 'EARLIEST_START_HOUR:', EARLIEST_START_HOUR);
+		log(LogLevel.DEBUG, 'LATEST_START_HOUR:', LATEST_START_HOUR);
+		log(LogLevel.DEBUG, 'Is too early?', new Date().getHours()<EARLIEST_START_HOUR);
+		log(LogLevel.DEBUG, 'Is too late?', new Date().getHours()>LATEST_START_HOUR);
+		if (new Date().getHours() < EARLIEST_START_HOUR || new Date().getHours() > LATEST_START_HOUR) {
+			log(LogLevel.INFO, 'Current time is outside of the allowed range - Bot will not run...');
+			return;
+		}
 		log(LogLevel.DEBUG, 'Job has been triggered...');
 		runBot();
 		log(LogLevel.DEBUG, 'Job completed...');
@@ -125,8 +139,12 @@ if (DEBUG_MODE === true) {
 } else {
 	// otherwise schedule bot to run every other hour
 	if (!POST_ONCE_ONLY) {
-		log(LogLevel.INFO, 'Scheduling bot to run every other hour...');
-		schedule.scheduleJob('0 */2 * * *', () => {
+		log(LogLevel.INFO, 'Scheduling bot using the following cron schedule:', CRON_SCHEDULE);
+		schedule.scheduleJob(CRON_SCHEDULE, () => {
+			if (new Date().getHours() < EARLIEST_START_HOUR || new Date().getHours() > LATEST_START_HOUR) {
+				log(LogLevel.INFO, 'Current time is outside of the allowed range - Bot will not run...');
+				return;
+			}
 			log(LogLevel.DEBUG, 'Job has been triggered...');
 			runBot();
 			log(LogLevel.DEBUG, 'Job completed...');

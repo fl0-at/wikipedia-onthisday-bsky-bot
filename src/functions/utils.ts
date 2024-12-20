@@ -9,7 +9,7 @@ dotenv.config();
 
 const DB_PATH = process.env.DB_PATH || './database';
 const ARTICLES_FILENAME = process.env.ARTICLES_FILENAME || 'articles.json';
-const POSTINGS_FILENAME = process.env.POSTINGS_FILENAME || 'postings.json';
+const POSTS_FILENAME = process.env.POSTS_FILENAME || 'posts.json';
 const LOG_LEVEL = process.env.LOG_LEVEL || LogLevel.INFO;
 const LOG_DIR = process.env.LOG_DIR || './logs';
 const LOG_NAME = process.env.LOG_NAME || 'wikipedia-otd-bsky-bot';
@@ -397,7 +397,7 @@ async function decorateText(text: string) {
 async function savePostToJSON(newPost: BlueskyPost) {
 	try {
 		// load the saved postings file if it exists
-		const pFromFile: Postings = JSON.parse((await fs.readFile(DB_PATH + '/' + POSTINGS_FILENAME)).toString());
+		const pFromFile: Postings = JSON.parse((await fs.readFile(DB_PATH + '/' + POSTS_FILENAME)).toString());
 		const pArr: Array<BlueskyPost> = [];
 		if (pFromFile.postings.length > 0) {
 			const postings: Array<BlueskyPost> = pFromFile.postings;
@@ -410,14 +410,14 @@ async function savePostToJSON(newPost: BlueskyPost) {
 		const pJSON = {
 			postings
 		}
-		await fs.writeFile(DB_PATH + '/' + POSTINGS_FILENAME, JSON.stringify(pJSON, null, 2));
+		await fs.writeFile(DB_PATH + '/' + POSTS_FILENAME, JSON.stringify(pJSON, null, 2));
 
 	} catch (error) {
 		if (error.code === 'ENOENT') {
 			// this means the postings file does not exist yet
 			// we need to create it
 			log(LogLevel.DEBUG, 'Creating new postings file...');
-			await fs.writeFile(DB_PATH + '/' + POSTINGS_FILENAME, JSON.stringify(JSON.parse('{"postings": []}'), null, 2));
+			await fs.writeFile(DB_PATH + '/' + POSTS_FILENAME, JSON.stringify(JSON.parse('{"postings": []}'), null, 2));
 			await savePostToJSON(newPost);
 		} else {
 			log(LogLevel.ERROR, 'Failed to save post to JSON:', error);
@@ -485,6 +485,22 @@ async function log(level: LogLevel | string, message: string, ...optionalParams:
 	return true;
 }
 
+function verifyCronNotation(cron: string) {
+	if (cron === '' || cron === undefined || cron === null) {
+		log(LogLevel.WARNING, 'Empty cron schedule detected!');
+		log(LogLevel.WARNING, 'Using default values instead...');
+		return false;
+	}
+	const regEx = /((((\d+,)+\d+|([\d\*]+(\/|-)\d+)|\d+|\*) ?){5,6})/;
+	const validCron = cron.match(regEx)? true : false;
+	if (!validCron)	{
+		log(LogLevel.WARNING, 'Invalid cron schedule:', cron);
+		log(LogLevel.WARNING, 'Using default values instead...');
+		return false;
+	}
+	return true;
+}
+
 export {
 	saveArticleWithoutContents,
 	saveArticleContent,
@@ -495,5 +511,6 @@ export {
 	prefixText,
 	stripHTMLElementsAndDecorateText,
 	savePostToJSON,
-	log
+	log,
+	verifyCronNotation
 };
