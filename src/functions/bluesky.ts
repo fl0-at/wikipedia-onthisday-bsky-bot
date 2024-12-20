@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { AtpAgent, Facet } from '@atproto/api';
 import { LogLevel } from "../utils/enums";
-import { log, prefixText, saveArticleContent, stripHTMLElements, savePostToJSON } from '../functions/utils';
+import { log, prefixText, saveArticleContent, savePostToJSON, stripHTMLElementsAndDecorateText } from '../functions/utils';
 import { RichText } from '@atproto/api';
 import { UnicodeString } from "@atproto/api";
 import { Link } from "../utils/interfaces";
@@ -58,7 +58,7 @@ async function postToBluesky(post: BlueskyPost): Promise<void> {
 	if (DEBUG_MODE) {
 		// log what should be posted and skip the actual posting process
 		log(LogLevel.TRACE, 'Received post object:', JSON.stringify(post, null, 2));
-		log(LogLevel.INFO, 'This could have been a Bluesky post:', 'text: "'+post.text+'",', 'createdAt: "'+post.createdAt+'"');
+		log(LogLevel.INFO, 'This could have been a Bluesky post:', '\n' + post.text);
 		await savePostToJSON(post);
 		return;
 	}
@@ -207,7 +207,7 @@ async function sanitizeAndPostContent(article: Article, content: Content): Promi
 		
 		// clean up the text
 		log(LogLevel.TRACE, 'Text to be cleaned:', textToPost);
-		const stripped = await stripHTMLElements(textToPost);
+		const stripped = await stripHTMLElementsAndDecorateText(textToPost);
 		const rawText = stripped["contentRaw"];
 		const links = stripped["linkCollection"];
 		log(LogLevel.TRACE, 'Stripped text:', rawText);

@@ -110,24 +110,26 @@ async function runBot(): Promise<void> {
 	log(LogLevel.INFO, 'Bot stopped...');
 }
 
-log(LogLevel.DEBUG, 'DEBUG_MODE is', DEBUG_MODE);
-
+log(LogLevel.INFO, 'DEBUG_MODE is', DEBUG_MODE);
+log(LogLevel.DEBUG, 'POST_ONCE_ONLY is', POST_ONCE_ONLY);
 // schedule a job
 if (DEBUG_MODE === true) {
 	// schedule bot to run once per minute in debug mode
 	
 	log(LogLevel.INFO, 'Scheduling bot to run every 15 seconds...');
 	schedule.scheduleJob('*/15 * * * * *', () => {
-		log(LogLevel.INFO, 'Job has been triggered...');
+		log(LogLevel.DEBUG, 'Job has been triggered...');
 		runBot();
+		log(LogLevel.DEBUG, 'Job completed...');
 	});
 } else {
 	// otherwise schedule bot to run every other hour
 	if (!POST_ONCE_ONLY) {
 		log(LogLevel.INFO, 'Scheduling bot to run every other hour...');
 		schedule.scheduleJob('0 */2 * * *', () => {
-			log(LogLevel.INFO, 'Job has been triggered...');
+			log(LogLevel.DEBUG, 'Job has been triggered...');
 			runBot();
+			log(LogLevel.DEBUG, 'Job completed...');
 		});
 	} else {
 		log(LogLevel.INFO, 'Running bot once only...');

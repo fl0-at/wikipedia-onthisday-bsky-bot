@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import { Article, BlueskyPost, Content } from '../classes/classes';
 import { ContentType, LogLevel } from '../utils/enums';
 import parse from 'node-html-parser';
@@ -10,6 +11,9 @@ const DB_PATH = process.env.DB_PATH || './database';
 const ARTICLES_FILENAME = process.env.ARTICLES_FILENAME || 'articles.json';
 const POSTINGS_FILENAME = process.env.POSTINGS_FILENAME || 'postings.json';
 const LOG_LEVEL = process.env.LOG_LEVEL || LogLevel.INFO;
+const LOG_DIR = process.env.LOG_DIR || './logs';
+const LOG_NAME = process.env.LOG_NAME || 'wikipedia-otd-bsky-bot';
+const LOG_TO_FILE = process.env.LOG_TO_FILE || false;
 const wikiURL = process.env.WIKIPEDIA_MAIN_URL || 'https://en.wikipedia.org';
 log('LOGGER', 'LogLevel is turned to', LOG_LEVEL);
 
@@ -205,8 +209,8 @@ async function checkIfContentAlreadyPostedForArticle(article: Article, content: 
 	}
 }
 
-// strip all HTML elements of the content
-async function stripHTMLElements(content: string) {
+// strip all HTML elements of the content and decorate the text
+async function stripHTMLElementsAndDecorateText(content: string) {
 	let contentRaw = content;
 
 	// first, create a link collection object so we
@@ -232,7 +236,7 @@ async function stripHTMLElements(content: string) {
 	contentRaw = contentRaw.replace('\n', '');
 
 	// &#160;
-	contentRaw = contentRaw.replace('&#160;', '');
+	contentRaw = contentRaw.replace('&#160;', ' ');
 
 	// now strip all remaining HTML tags
 
@@ -247,7 +251,7 @@ async function stripHTMLElements(content: string) {
 	for (const li of listHTMLNodes) {
 		contentRaw = contentRaw.replace(li.toString(), li.innerHTML);
 		contentRaw = contentRaw.replace('(', '');
-		contentRaw = contentRaw.replace(')', '');
+		//contentRaw = contentRaw.replace(')', '');
 	}
 
 	// <b>
@@ -260,23 +264,40 @@ async function stripHTMLElements(content: string) {
 	const abbrHTMLNodes = parse(contentRaw).querySelectorAll('abbr');
 	for (const abbrNode of abbrHTMLNodes) {
 		if (abbrNode.innerHTML.includes('b.')) {
-			contentRaw = contentRaw.replace(abbrNode.toString(), abbrNode.innerHTML).replace('b.', 'is born <<BORN>> in ')
+			contentRaw = contentRaw.replace(abbrNode.toString(), abbrNode.innerHTML).replace('b.', `was born <<YEARSAGO>> (`)
 		} else if (abbrNode.innerHTML.includes('d.')) {
-			contentRaw = contentRaw.replace(abbrNode.toString(), abbrNode.innerHTML).replace('d.', 'dies <<DIED>> in ')
+			contentRaw = contentRaw.replace(abbrNode.toString(), abbrNode.innerHTML).replace('d.', `died <<YEARSAGO>> (`)
 		}
 	}
 
 	// need to strip <i> completely - usually the 
 	// feed tells us that for this post there is
 	// a picture that goes with this
+	// future improvement - make a separate type of post
+	// for the "featured" event of the day with the picture
 	const iHTMLNodes = parse(contentRaw).querySelectorAll('i');
 	for (const i of iHTMLNodes) {
-		contentRaw = contentRaw.replace(i.toString(), '');
+		contentRaw = contentRaw.replace(' '+i.toString(), '');
 	}
 
 	// to clean up, let's replace all "double spaces"
-	// with single ones
+	// with single ones and make sure there are no
+	// spaces before or after parentheses
 	contentRaw = contentRaw.replace('  ', ' ');
+	contentRaw = contentRaw.replace('( ', '(');
+	contentRaw = contentRaw.replace(' )', ')');
+
+	// if the content includes either <<YEARSAGO>>
+	// we want to replace <<YEARSAGO>> with the number of years
+	if (contentRaw.includes('<<YEARSAGO>>')) {
+		const yearString: string = contentRaw.match(/\((\d+)\)/)[0].toString().replace('(', '').replace(')', '');
+		log(LogLevel.TRACE, 'Year of anniversary as string:', yearString);
+		const year: number = Number(yearString);
+		log(LogLevel.TRACE, 'Year of anniversary:', year);
+		const yearsAgo: number = new Date().getUTCFullYear() - year;
+		log(LogLevel.DEBUG, 'Difference in years to today:', yearsAgo);
+		contentRaw = contentRaw.replace('<<YEARSAGO>>', yearsAgo.toString() + ' years ago');
+	}
 
 	/*
 		maybe in the future we could 
@@ -309,23 +330,25 @@ async function prefixText(article: Article, content: Content) {
 	\********************************************************/
 	log(LogLevel.DEBUG, 'prefixText called...');
 	const articleContents = await loadArticleContent(article);
-	log(LogLevel.DEBUG, 'Loaded article contents:', JSON.stringify(articleContents, null, 2));
+	log(LogLevel.TRACE, 'Loaded article contents:', JSON.stringify(articleContents, null, 2));
 	const todayContent: Content = JSON.parse(JSON.stringify(articleContents)).find((cont: { type: ContentType, value: string }) => cont.type === ContentType.todayText);
-	log(LogLevel.DEBUG, 'Fetched todayContent:', JSON.stringify(todayContent, null, 2));
+	log(LogLevel.TRACE, 'Fetched todayContent:', JSON.stringify(todayContent, null, 2));
 	const todayText = todayContent.value;
-	log(LogLevel.DEBUG, 'todayText:', todayText);
+	log(LogLevel.TRACE, 'todayText:', todayText);
 	log(LogLevel.DEBUG, 'Trying to prefix content...');
 
 	// depending on the content, we will build our posts differently
 	let prefixedText = '';
 	let prefixedContent = content.value;
-	/*
-	
-		TO DO: MAKE SURE THERE ARE 2 NEWLINE CHARACTERS AFTER THE PREFIX
 
-	*/
 	switch (content.type) {
 		case ContentType.anniversary:
+			// we want to prefix the line with an emoji, depending on whether the person died or was born
+			if(content.value.includes('<abbr title=\"born\">')) {
+				prefixedContent = '<<BORN>> ' + prefixedContent;
+			} else if(content.value.includes('<abbr title=\"died\">')) {
+				prefixedContent = '<<DIED>> ' + prefixedContent;
+			}
 			prefixedText = '#Anniversary - #OnThisDay, ' + todayText + ':\n\n' + prefixedContent;
 			break;
 		case ContentType.event:
@@ -405,31 +428,59 @@ async function savePostToJSON(newPost: BlueskyPost) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function log(level: LogLevel | string, message: string, ...optionalParams: any[]) {
 	try {
+		const now = new Date().toISOString();
+		const today = now.split('T')[0];
+		const logMsgPrefix = `[${now}][${level}]\t\t:`;
+		if (LOG_TO_FILE) {
+			if (!fsSync.existsSync(LOG_DIR)) {
+				await fs.mkdir(LOG_DIR);
+			}
+		}
+		let additionalInfo = '';
+		if (optionalParams.length > 0) {
+			additionalInfo = optionalParams.join(' ');
+		}
 		switch (level) {
 			case LogLevel.CRITICAL:
-				console.error(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				console.error(logMsgPrefix + ` ${message}`, ...optionalParams);
+				if (LOG_TO_FILE) await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
 				break;
 			case LogLevel.ERROR:
-				if (LOG_LEVEL != LogLevel.CRITICAL) console.error(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				if (LOG_LEVEL != LogLevel.CRITICAL) { 
+					console.error(logMsgPrefix + ` ${message}`, ...optionalParams); 
+					await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
+				}
 				break;
 			case LogLevel.WARNING:
-				if (LOG_LEVEL != LogLevel.CRITICAL && LOG_LEVEL != LogLevel.ERROR) console.warn(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				if (LOG_LEVEL != LogLevel.CRITICAL && LOG_LEVEL != LogLevel.ERROR) {
+					console.warn(logMsgPrefix + ` ${message}`, ...optionalParams);
+					await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');}
 				break;
 			case LogLevel.INFO:
-				if (LOG_LEVEL != LogLevel.CRITICAL && LOG_LEVEL != LogLevel.ERROR && LOG_LEVEL != LogLevel.WARNING) console.info(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				if (LOG_LEVEL != LogLevel.CRITICAL && LOG_LEVEL != LogLevel.ERROR && LOG_LEVEL != LogLevel.WARNING) {
+					console.info(logMsgPrefix + ` ${message}`, ...optionalParams);
+					await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
+				}
 				break;
 			case LogLevel.DEBUG:
-				if (LOG_LEVEL === LogLevel.DEBUG || LOG_LEVEL === LogLevel.TRACE) console.debug(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				if (LOG_LEVEL === LogLevel.DEBUG || LOG_LEVEL === LogLevel.TRACE) {
+					console.debug(logMsgPrefix + ` ${message}`, ...optionalParams);
+					await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
+				}
 				break;
 			case LogLevel.TRACE:
-				if (LOG_LEVEL === LogLevel.TRACE) console.debug(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				if (LOG_LEVEL === LogLevel.TRACE) {
+					console.debug(logMsgPrefix + ` ${message}`, ...optionalParams);
+					await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
+				}
 				break;
 			default:
-				console.log(`[${new Date().toISOString()}][${level}] ${message}`, ...optionalParams);
+				console.log(logMsgPrefix + ` ${message}`, ...optionalParams);
+				if (LOG_TO_FILE) await fs.appendFile(`${LOG_DIR}/${LOG_NAME}-${today}.log`, `${logMsgPrefix} ${message} ${additionalInfo}\n`, 'utf-8');
 				break;
 		}
 	} catch (error) {
-		throw new Error(`Unable to log to console: [${new Date().toISOString()}] ${error}`);
+		throw new Error(`Unable to log either to console or to file: [${new Date().toISOString()}] ${error}`);
 	}
 	return true;
 }
@@ -442,7 +493,7 @@ export {
 	loadArticleContent,
 	checkIfContentAlreadyPostedForArticle,
 	prefixText,
-	stripHTMLElements,
+	stripHTMLElementsAndDecorateText,
 	savePostToJSON,
 	log
 };

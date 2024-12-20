@@ -113,7 +113,7 @@ async function getOnThisDayHolidays(onThisDayArticle: {id: string, title: string
 		// <p> node, we need to add the opening tag
 		holidayText = '<p>' + combinedText[1].replace('\n','');
 	} else {		
-		log(LogLevel.INFO, 'For today, there is no holiday info available:', holidayNode.toString())
+		log(LogLevel.DEBUG, 'For today, there is no holiday info available:', holidayNode.toString().replace('\n',''))
 		return [];
 	}		
 	log(LogLevel.TRACE, 'HolidayText:', holidayText.toString());
@@ -132,7 +132,7 @@ async function getOnThisDayEvents(onThisDayArticle: {id: string, title: string, 
 	const eventNodes = parse(onThisDayArticle.contents).querySelectorAll('.mw-parser-output > ul > li');
 	log(LogLevel.TRACE, 'eventNodes:', eventNodes.toString());
 	if (eventNodes.length == 0) {
-		log(LogLevel.INFO, 'For today, there is no event info available:', eventNodes.toString())
+		log(LogLevel.DEBUG, 'For today, there is no event info available:', eventNodes.toString().replace('\n',''))
 		return [];
 	}
 	log(LogLevel.DEBUG, `Found ${eventNodes.length} events, parsing...`);
@@ -149,7 +149,7 @@ async function getOnThisDayAnniversaries(onThisDayArticle: {id: string, title: s
 	const anniversaryNodes = parse(onThisDayArticle.contents).querySelectorAll('div.mw-parser-output > div.hlist:not(.otd-footer):not(.inline) > ul > li');
 	log(LogLevel.TRACE, 'anniversaryNodes:', anniversaryNodes.toString());
 	if (anniversaryNodes.length == 0) {
-		log(LogLevel.INFO, 'For today, there is no anniversary info available:', anniversaryNodes.toString())
+		log(LogLevel.DEBUG, 'For today, there is no anniversary info available:', anniversaryNodes.toString().replace('\n',''))
 		return [];
 	}
 	log(LogLevel.DEBUG, `Found ${anniversaryNodes.length} anniversaries, parsing...`);
