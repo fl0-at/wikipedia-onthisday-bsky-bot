@@ -6,6 +6,10 @@ The bot will parse the Atom feed \(URL can be defined per [environment variables
   
 Per default, the bot will post one entry of the "On this day" article every other hour, but this can be configured/customized via [environment variables](#environment-variables).
 
+An example post on Bluesky could look something like this:  
+  
+![screenshot of an example Bluesky post](assets/wiki-otd-bsky-bot_post.png)
+
 [1]: https://docs.bsky.app/docs/advanced-guides/post-richtext
 [2]: https://atproto.blue/en/latest/atproto/atproto_client.models.app.bsky.richtext.facet.html
 
