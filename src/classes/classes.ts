@@ -6,20 +6,31 @@ import { ContentType } from '../utils/enums';
  * @class Content
  * @property {ContentType} type - The type of the content
  * @property {string} value - The value of the content
+ * @property {string} imgUri - The image URI associated with the content
+ * @property {string} imgAltText - The data of the content
+ * @property {boolean} alreadyPosted - A boolean value that indicates if the content has already been posted
  */
 class Content {
 	type: ContentType;
 	value: string;
+	imgUri: string|null;
+	imgAltText: string|null;
+	alreadyPosted: boolean;
 
 	/**
 	 * Creates an instance of Content.
 	 * @param {ContentType} type - The type of the content
 	 * @param {string} value - The value of the content
+	 * @param {string} [imgUri=null] - The image URI associated with the content (default is null)
+	 * @param {string} [imgUri=null] - The data of the content (default is null)
 	 * @constructor
 	 */
-	constructor(type: ContentType, value: string) {
+	constructor(type: ContentType, value: string, imgUri: string = null, imgAltText: string = null, alreadyPosted: boolean = false) {
 		this.type = type;
 		this.value = value;
+		this.imgUri = imgUri;
+		this.imgAltText = imgAltText;
+		this.alreadyPosted = alreadyPosted;
 	}
 }
 

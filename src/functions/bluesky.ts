@@ -177,14 +177,7 @@ async function preparePost(rawText: string, linkCollection: Array<Link>): Promis
 
 		}
 
-		/*
-		const postRecord = {
-			$type: 'app.bsky.feed.post',
-			text: rt.text,
-			facets: rt.facets,
-			createdAt: new Date().toISOString(),
-		}
-		*/
+		// create the post record
 		const postRecord = new BlueskyPost(rt.text, rt.facets, new Date().toISOString());
 		log(LogLevel.TRACE, 'Determined facets:', postRecord.facets == undefined ? 'undefined' : JSON.stringify(postRecord.facets, null , 2));
 		log(LogLevel.TRACE, 'Prepared post, post record:', JSON.stringify(postRecord, null, 2));
@@ -220,8 +213,12 @@ async function sanitizeAndPostContent(article: Article, content: Content): Promi
 		await postToBluesky(postRecord);
 		log(LogLevel.TRACE, 'Content posted:', JSON.stringify(postRecord, null, 2));
 
+		// need to rework this part
+		// the article content does not need to be saved
+		// it just needs to be updated to indicate that it has been posted
+
 		// save posted content to article
-		await saveArticleContent(article, content);	
+		//await saveArticleContent(article, content);	
 	} catch (error) {
 		log(LogLevel.ERROR, 'Failed to sanitize post content:', error);
 		return false;		

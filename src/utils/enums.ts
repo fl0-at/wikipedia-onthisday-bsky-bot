@@ -1,6 +1,7 @@
 enum ContentType {
 	todayText = 'todayText',
 	holiday = 'holiday',
+	featuredEvent = 'featuredEvent',
 	event = 'event',
 	anniversary = 'anniversary'
 }

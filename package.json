@@ -1,6 +1,6 @@
 {
   "name": "wikipedia-onthisday-bsky-bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A Bluesky bot that posts the \"on this day\" articles from Wikipedia on Bluesky",
   "main": "dist/app.js",
   "scripts": {

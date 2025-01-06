@@ -5,7 +5,7 @@ import { parse } from 'node-html-parser';
 import { Article, Content } from '../classes/classes';
 import { log } from '../functions/utils';
 import { LogLevel, ContentType } from '../utils/enums';
-import { OnThisDayArticle } from '../utils/interfaces';
+import { OnThisDayArticle, PicturedEvent } from '../utils/interfaces';
 dotenv.config();
 
 const WIKIPEDIA_MAIN_URL = process.env.WIKIPEDIA_MAIN_URL! || 'https://en.wikipedia.org';
@@ -61,6 +61,11 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 		// push holiday entries into our new content list
 		for(const holiday of await getOnThisDayHolidays(articles[0])) {
 			contentList.push(new Content(ContentType.holiday, holiday));
+		}
+
+		// push featured event entries into our new content list
+		for(const featuredEvent of await getOnThisDayFeaturedEvents(articles[0])) {
+			contentList.push(new Content(ContentType.featuredEvent, featuredEvent.event, featuredEvent.imgUri, featuredEvent.imgAltText));
 		}
 
 		// push event entries into our new content list
@@ -130,7 +135,11 @@ async function getOnThisDayHolidays(onThisDayArticle: OnThisDayArticle): Promise
 		return [];
 	}		
 	log(LogLevel.TRACE, 'HolidayText:', holidayText.toString());
-	const holidays = holidayText.split(', ');
+	// split the holidays into an array
+	// bugfix for issue #3:
+	// split by '; ' instead of ', '
+	// https://github.com/fl0-at/wikipedia-onthisday-bsky-bot/issues/3
+	const holidays = holidayText.split('; ');
 	const holidayList: Array<string> = [];
 	log(LogLevel.DEBUG, `Found ${holidays.length} holidays, parsing...`);
 	for (const holiday of holidays) {
@@ -138,6 +147,44 @@ async function getOnThisDayHolidays(onThisDayArticle: OnThisDayArticle): Promise
 		holidayList.push(holiday.toString());
 	}
 	return holidayList;
+}
+
+
+async function getOnThisDayFeaturedEvents(onThisDayArticle: OnThisDayArticle): Promise<PicturedEvent[]> {
+	const eventNodes = parse(onThisDayArticle.contents).querySelectorAll('.mw-parser-output > ul > li');
+	// need to iterate over the event nodes to find the "featured" events
+	// they include the word "pictured" in the text
+	const featuredEventList = [];
+	for (const event of eventNodes) {
+		// in the future, we might want to skip the "pictured" events
+		// because they are considered a "featured event"
+		// and might be posted separately, including a picture
+		// for now, we just log that they are "pictured" events
+		if (!(event.toString().includes('pictured'))) {
+			// skip the non-"pictured" events
+			log(LogLevel.DEBUG, 'Skipping "regular" event:', event.toString());
+			continue;
+		}
+		log(LogLevel.DEBUG, 'Featured event found:', event.toString());
+		featuredEventList.push(event.toString());
+	}
+	if (featuredEventList.length == 0) {
+		log(LogLevel.DEBUG, 'For today, there is no featured event info available:', featuredEventList.toString().replace('\n',''))
+		return [];
+	}
+	log(LogLevel.DEBUG, `Found ${featuredEventList.length} featured events, parsing...`);
+	// need to find the corresponding picture for the featured event
+	const featuredEvents = [];
+	for (const featuredEvent of featuredEventList) {
+		// find the corresponding picture for the featured event
+		// by searching for the <a> tag with the class "image"
+		const picture = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > #mp-otd-img > div > span > img');
+		const pictureUri = picture.getAttribute('src');
+		const pictureAltText = picture.getAttribute('alt');
+		log(LogLevel.DEBUG, 'Picture found:', pictureUri);
+		featuredEvents.push({ event: featuredEvent, imgUri: pictureUri, imgAltText: pictureAltText });
+	}
+	return featuredEvents;
 }
 
 /**
@@ -155,6 +202,11 @@ async function getOnThisDayEvents(onThisDayArticle: OnThisDayArticle): Promise<s
 	log(LogLevel.DEBUG, `Found ${eventNodes.length} events, parsing...`);
 	const eventList = [];
 	for (const event of eventNodes) {
+		if (event.toString().includes('pictured')) {
+			// skip the "pictured" events
+			log(LogLevel.DEBUG, 'Skipping "pictured" event:', event.toString());
+			continue;
+		}
 		log(LogLevel.DEBUG, 'Event found:', event.toString());
 		eventList.push(event.toString());
 	}

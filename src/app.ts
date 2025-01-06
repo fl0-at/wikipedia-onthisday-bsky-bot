@@ -3,7 +3,7 @@ import schedule from 'node-schedule';
 import { LogLevel, ContentType } from './utils/enums';
 import { loginToBluesky, sanitizeAndPostContent } from './functions/bluesky';
 import { fetchOnThisDayArticle } from './functions/wikipedia';
-import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithoutContents, saveArticleContent, log, verifyCronNotation } from './functions/utils';
+import { checkIfContentAlreadyPostedForArticle, loadArticles, saveArticleWithoutContents, saveArticleContent, log, isValidCronNotation, saveArticleToJSON, loadArticle } from './functions/utils';
 
 // load environment variables
 dotenv.config();
@@ -12,8 +12,8 @@ const DEBUG_MODE = process.env.DEBUG_MODE === 'true' || false;
 const POST_ONCE_ONLY = process.env.POST_ONCE_ONLY === 'true' || false;
 const EARLIEST_START_HOUR = Number(process.env.EARLIEST_START_HOUR) || 6;
 const LATEST_START_HOUR = Number(process.env.LATEST_START_HOUR) || 22;
-const CRON_SCHEDULE = (verifyCronNotation(process.env.CRON_SCHEDULE)? process.env.CRON_SCHEDULE : '0 */2 * * *') || '0 */2 * * *';
-const DEBUG_CRON_SCHEDULE = (verifyCronNotation(process.env.DEBUG_CRON_SCHEDULE)? process.env.DEBUG_CRON_SCHEDULE : '*/15 * * * * *') || '*/15 * * * * *';
+const CRON_SCHEDULE = (isValidCronNotation(process.env.CRON_SCHEDULE)? process.env.CRON_SCHEDULE : '0 */2 * * *') || '0 */2 * * *';
+const DEBUG_CRON_SCHEDULE = (isValidCronNotation(process.env.DEBUG_CRON_SCHEDULE)? process.env.DEBUG_CRON_SCHEDULE : '*/15 * * * * *') || '*/15 * * * * *';
 
 /**
  * Main function that runs the bot
@@ -30,28 +30,30 @@ async function runBot(): Promise<void> {
 		log(LogLevel.DEBUG, 'Loading already posted articles...');
 		const postedArticles = await loadArticles();
 		log(LogLevel.TRACE, 'Posted articles loaded:', postedArticles);
-		// check if the article of the day is already in our DB
+
+		// check if the article of the day is already in our JSON file
 		if (!postedArticles || !JSON.stringify(postedArticles).includes(articleOfToday.id)) {
+			// article of today was not found in JSON file
 			log(LogLevel.TRACE, 'postedArticles:', JSON.stringify(postedArticles));
 			log(LogLevel.TRACE, 'articleOfToday:', articleOfToday.toString());
 			log(LogLevel.DEBUG, 'postedArticles.includes(articleOfToday):', JSON.stringify(postedArticles).includes(articleOfToday.id));
-			// if not in DB yet, log info that we got a new article
+			// if not in JSON file yet, log info that we got a new article
 			log(LogLevel.INFO, 'Processing new Article:', articleOfToday.id);
 
-			// save article (without contents) to local file
-			// we just need to create a bare entry first
-			await saveArticleWithoutContents(articleOfToday);
+			// instead of just saving the article without contents, 
+			// we will save the article with all its contents
+			await saveArticleToJSON(articleOfToday);
 
 			// initialize index at 0
 			let firstRealContent = 0;
 			let firstRealContentFound = false;
-			for (const content of articleOfToday.contentList) {
+
+			// loop through the just saved article contents
+			const savedArticle = await loadArticle(articleOfToday.id);
+			for (const content of savedArticle.contentList) {
 				switch (content.type) {
 					case ContentType.todayText:
-						// if the content is of type "todayText"
-						// save this text to our json file
-						await saveArticleContent(articleOfToday, articleOfToday.contentList[firstRealContent]);
-						// ...and increment our index value:
+						// ...increment our index value:
 						firstRealContent++;
 						break;
 					default:
@@ -65,12 +67,12 @@ async function runBot(): Promise<void> {
 
 			// no need to loop through article contents
 			// just post the first entry since the article did not exist in our DB
-			log(LogLevel.INFO, 'Preparing first postable content for article:', articleOfToday.id);
-			log(LogLevel.TRACE, 'Article:', articleOfToday);
+			log(LogLevel.INFO, 'Preparing first postable content for article:', savedArticle.id);
+			log(LogLevel.TRACE, 'Article:', savedArticle);
 
 			// need to call function to sanitize post content
 			// this function also takes care of posting to Bsky
-			const postSuccessful = await sanitizeAndPostContent(articleOfToday, articleOfToday.contentList[firstRealContent]);
+			const postSuccessful = await sanitizeAndPostContent(articleOfToday, savedArticle.contentList[firstRealContent]);
 
 			// log failed posts to the console
 			if (!postSuccessful) log(LogLevel.CRITICAL, 'Failed to post to Bluesky!!!');

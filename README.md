@@ -43,7 +43,7 @@ This app depends on a couple of environment variables. Some are required in orde
 - `CRON_SCHEDULE`
   - you can define the schedule based on [node-schedule cron notation][3] with this variable
   - 5 and 6 digit cron notation is supported
-  - example: `* 30 */2 * *` => every 2nd hour at 30 minutes past the hour
+  - example: `0 30 */2 * *` => every 2nd hour at 30 minutes past the hour and 0 seconds
   - defaults to `0 */2 * * *` => every 2nd hour
   - _**NOTE:** if you supply an invalid cron schedule, the default value will be used!_
 - `WIKIPEDIA_MAIN_URL`

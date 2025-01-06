@@ -11,6 +11,12 @@ interface Link {
 	url: string
 }
 
+interface PicturedEvent {
+	event: string,
+	imgUri: string,
+	imgAltText: string
+}
+
 /**
  * An interface for an articles object
  * @interface Articles
@@ -26,7 +32,7 @@ interface Articles {
  * @property {BlueskyPost[]} postings - The list of posts
  */
 interface Posts {
-	postings: Array<BlueskyPost>;
+	posts: Array<BlueskyPost>;
 }
 
 interface OnThisDayArticle {
@@ -36,4 +42,4 @@ interface OnThisDayArticle {
 	link: string;
 }
 
-export { Link, Articles, Posts, OnThisDayArticle };
+export { Link, Articles, Posts, OnThisDayArticle, PicturedEvent };
