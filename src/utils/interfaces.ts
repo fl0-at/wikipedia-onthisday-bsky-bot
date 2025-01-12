@@ -11,10 +11,30 @@ interface Link {
 	url: string
 }
 
+/**
+ * An interface for a picture object
+ * @interface Picture
+ * @property {string} uri - The URI of the picture
+ * @property {string} alt - The alt text of the picture
+ * @property {number} height - The height of the picture
+ * @property {number} width - The width of the picture
+ */
+interface Picture {
+	uri: string,
+	alt: string,
+	height: number,
+	width: number
+}
+
+/**
+ * An interface for a pictured event object
+ * @interface PicturedEvent
+ * @property {string} event - The event
+ * @property {Picture} img - The image
+ */
 interface PicturedEvent {
 	event: string,
-	imgUri: string,
-	imgAltText: string
+	img: Picture
 }
 
 /**
@@ -42,4 +62,4 @@ interface OnThisDayArticle {
 	link: string;
 }
 
-export { Link, Articles, Posts, OnThisDayArticle, PicturedEvent };
+export { Link, Articles, Posts, OnThisDayArticle, PicturedEvent, Picture };

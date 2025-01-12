@@ -1,5 +1,6 @@
-import { RichText } from '@atproto/api/dist/rich-text/rich-text';
 import { ContentType } from '../utils/enums';
+import { AppBskyEmbedImages, AppBskyFeedPost, RichText } from '@atproto/api';
+import { Picture } from '../utils/interfaces';
 
 /**
  * A class that represents a content object
@@ -13,8 +14,7 @@ import { ContentType } from '../utils/enums';
 class Content {
 	type: ContentType;
 	value: string;
-	imgUri: string|null;
-	imgAltText: string|null;
+	img: Picture|null;
 	alreadyPosted: boolean;
 
 	/**
@@ -25,11 +25,10 @@ class Content {
 	 * @param {string} [imgUri=null] - The data of the content (default is null)
 	 * @constructor
 	 */
-	constructor(type: ContentType, value: string, imgUri: string = null, imgAltText: string = null, alreadyPosted: boolean = false) {
+	constructor(type: ContentType, value: string, img: Picture = null, alreadyPosted: boolean = false) {
 		this.type = type;
 		this.value = value;
-		this.imgUri = imgUri;
-		this.imgAltText = imgAltText;
+		this.img = img;
 		this.alreadyPosted = alreadyPosted;
 	}
 }
@@ -38,10 +37,12 @@ class Content {
  * A class that represents an article object
  * @class Article
  * @property {string} id - The id of the article
+ * @property {string} url - The url of the article
  * @property {Content[]} contentList - The list of contents in the article
  */
 class Article {
-	id: string; 
+	id: string;
+	url: string;
 	contentList: Content[];
 
 	public toString() {
@@ -51,6 +52,7 @@ class Article {
 		}
 		const str = {
 			"id": this.id,
+			"url": this.url,
 			"contentList": contents
 		}
 		return JSON.stringify(str);
@@ -59,11 +61,13 @@ class Article {
 	/**
 	 * Creates an instance of Article.
 	 * @param {string} id - The id of the article
+	 * @param {string} url - The url of the article
 	 * @param {Content[]} contentList - The list of contents in the article
 	 * @constructor
 	 */
-	constructor(id: string, contentList: Content[]){
+	constructor(id: string, url: string, contentList: Content[]){
 		this.id = id;
+		this.url = url;
 		this.contentList = contentList
 	}
 }
@@ -73,14 +77,16 @@ class Article {
  * @class BlueskyPost
  * @property {string} $type - The type of the post
  * @property {RichText["text"]} text - The text of the post
+ * @property {AppBskyFeedPost.Record["embed"]} - The embeds of the post
  * @property {RichText["facets"]} facets - The facets of the post
  * @property {string} createdAt - The creation date of the post
  */
 class BlueskyPost {
-	$type: string;
+	$type!: string;
 	text: RichText["text"];
-	facets: RichText["facets"];
-	createdAt: string;
+	embeds?: AppBskyFeedPost.Record["embed"];
+	facets?: RichText["facets"];
+	createdAt!: string;
 
 	/**
 	 * Creates an instance of BlueskyPost.
@@ -89,9 +95,10 @@ class BlueskyPost {
 	 * @param {string} createdAt - The creation date of the post
 	 * @constructor
 	 */
-	constructor(text: RichText["text"], facets: RichText["facets"], createdAt: string) {
+	constructor(text: RichText["text"], createdAt: string, embeds?: AppBskyFeedPost.Record["embed"], facets?: RichText["facets"] ) {
 		this.$type = 'app.bsky.feed.post';
 		this.text = text;
+		this.embeds = embeds;
 		this.facets = facets;
 		this.createdAt = createdAt;
 	}

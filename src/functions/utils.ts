@@ -98,7 +98,7 @@ async function loadFromJSON(filename: string): Promise<Articles|Posts|void> {
 			await initializeJSON(filename);
 			return JSON.parse(await fs.readFile(DB_PATH + '/' + filename, 'utf-8'));
 		} else {
-			log(LogLevel.CRITICAL, 'Failed to load JSON from local filesystem:', error);
+			log(LogLevel.CRITICAL, `Failed to load ${filename} from local filesystem:`, error);
 			return;
 		}
 	}
@@ -117,20 +117,31 @@ async function saveToJSON(obj: Articles): Promise<void>;
 async function saveToJSON(obj: Posts): Promise<void>;
 /**
  * Save the object to the database
- * @param {Articles|Posts} obj - The articles database
+ * @param {Articles|Posts} obj - The object to be saved
  * @returns {Promise<void>}
  */
 async function saveToJSON(obj: Articles|Posts): Promise<void> {
 	try {
+		let filename: string = undefined;
 		if (isArticles(obj)) {
-			await fs.writeFile(DB_PATH + '/' + ARTICLES_FILENAME, JSON.stringify(obj, null, 2), 'utf-8');
+			log(LogLevel.DEBUG, 'Determined file type:', 'Articles');
+			filename = ARTICLES_FILENAME;
 		} else if (isPosts(obj)) {
-			await fs.writeFile(DB_PATH + '/' + POSTS_FILENAME, JSON.stringify(obj, null, 2), 'utf-8');
+			log(LogLevel.DEBUG, 'Determined file type:', 'Posts');
+			filename = POSTS_FILENAME;
 		} else {
+			log(LogLevel.ERROR, 'Failed to determine file type!');
 			throw new Error('Invalid object type');
 		}
+		// write the file
+		if(!filename || filename === undefined) {
+			log(LogLevel.ERROR, 'Invalid file name:', filename);
+			throw new Error(`Invalid file name: ${filename}`);
+		}		
+		log(LogLevel.DEBUG, 'Trying to write file:', DB_PATH + '/' + filename);
+		await fs.writeFile(DB_PATH + '/' + filename, JSON.stringify(obj, null, 2), 'utf-8');
 	} catch (error) {
-		log(LogLevel.CRITICAL, 'Failed to save JSON to local filesystem:', error);
+		log(LogLevel.CRITICAL, `Failed to save ${typeof obj} ${JSON.stringify(obj,null,2)} to local filesystem:`, error);
 	}
 }
 
@@ -139,7 +150,52 @@ function isArticles(obj: Articles|Posts): obj is Articles {
 }
 
 function isPosts(obj: Articles|Posts): obj is Posts {
-	return (obj as Articles).articles !== undefined;
+	return (obj as Posts).posts !== undefined;
+}
+
+async function markArticleContentAsPosted(article: Article, content: Content): Promise<void> {
+	try {
+		// load articles
+		let loadedArticles = await loadArticles();
+		
+		// find the article we need to update
+		let articleToUpdate: Article = loadedArticles.find((art: { id: string }) => art.id === article.id);
+
+		// find the content we need to update
+		let contentToUpdate: Content = articleToUpdate.contentList.find((con: Content) => con.value === content.value);
+
+		// update the content to posted: true
+		contentToUpdate.alreadyPosted = true;
+
+		// update the article's content list
+		articleToUpdate.contentList = articleToUpdate.contentList.map(c => c.value !== contentToUpdate.value ? c : contentToUpdate);
+
+		// update the article array
+		loadedArticles = loadedArticles.map(a => a.id !== articleToUpdate.id ? a : articleToUpdate );
+
+		// create new articles JSON obj
+		const articles: Articles = { articles: loadedArticles };
+
+		// save the articles again
+		await saveToJSON(articles);
+		
+	} catch (error) {
+		log(LogLevel.ERROR, `Failed to mark content inside article as "posted":`, error);
+		throw new Error(`Failed to mark content inside article as "posted": ${error}`);
+	}
+	return;
+}
+
+/**
+ * A helper function to get a blob from an image URI
+ * @param {string} imgUri - The URI of the image you want to receive a blob for
+ * @returns {Promise<Blob>}
+ */
+async function getBlobFromImgUri(imgUri: string): Promise<Blob> {
+	log(LogLevel.DEBUG, 'Received img URI:', imgUri);
+	const blob: Promise<Blob> = (await fetch(imgUri)).blob();
+	log(LogLevel.DEBUG, 'Fetched blob:', await blob);
+	return blob;
 }
 
 /**
@@ -150,7 +206,7 @@ function isPosts(obj: Articles|Posts): obj is Posts {
 async function saveArticleToJSON(article: Article): Promise<void> {
 	try {
 		// we will save the entire article to a JSON file
-		const newArticle: Article = new Article(article.id, article.contentList);
+		const newArticle: Article = new Article(article.id, article.url, article.contentList);
 		log(LogLevel.DEBUG, 'Saving article to JSON:', newArticle);
 
 		// load the JSON file
@@ -182,7 +238,7 @@ async function saveArticleToJSON(article: Article): Promise<void> {
 async function saveArticleWithoutContents(article: Article): Promise<void> {
 	try {
 		// need to just write the "bare" article, without contents
-		const articleWithoutContent: Article = new Article(article.id, []);
+		const articleWithoutContent: Article = new Article(article.id, article.url, []);
 		log(LogLevel.DEBUG, 'Saving barebones article to JSON:', articleWithoutContent);
 
 		// load the JSON file
@@ -222,7 +278,7 @@ async function saveArticleContent(article: Article, content: Content): Promise<v
 		const indexForUpdate = json.articles.findIndex((art: { id: string }) => art.id === article.id);
 		if (indexForUpdate === -1) throw new Error(`Cannot find article with ID ${article.id}`);
 
-		const curArt = new Article(article.id, json.articles[indexForUpdate].contentList);
+		const curArt = new Article(article.id, article.url, json.articles[indexForUpdate].contentList);
 		// need to check if to be saved content already exists
 		let isDuplicateContent = false;
 		for (const con of json.articles[indexForUpdate].contentList) {
@@ -318,16 +374,17 @@ async function loadArticleContent(article: Article): Promise<Content[]> {
  * Check if the content has already been posted for the article
  * @param {Article} article 
  * @param {Content} content 
- * @returns 
+ * @returns {Promise<boolean>}
+ * @deprecated This function has been deprecated as of 1.1.0
  */
-async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content) {
+async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content): Promise<boolean> {
 	try {
 		// need to just read that one article
 		const postedArticle: Article | null = await loadArticle(article.id);
 		if (postedArticle === null || postedArticle === undefined) return false;
 		const postedArticleContentList: Array<Content> = await loadArticleContent(postedArticle);
 		const postedContent: Content = postedArticleContentList.find((posCon: { value: string, type: ContentType }) => posCon.type === content.type && posCon.value === content.value);
-		if (!postedContent) return false;
+		if (!postedContent.alreadyPosted) return false;
 		return true;
 	} catch (error) {
 		if (error.code === 'ENOENT') {
@@ -354,6 +411,7 @@ async function stripHTMLElementsAndDecorateText(content: string): Promise<{ cont
 
 	// &#160;
 	contentRaw = contentRaw.replace('&#160;', ' ');
+	contentRaw = contentRaw.replace('&#8722;', '−');
 
 	// now strip all remaining HTML tags
 
@@ -842,6 +900,10 @@ async function prefixText(article: Article, content: Content): Promise<string> {
 			prefixedContent = prefixedContent.replace('</a> – ', '</a>:\n\n');
 			prefixedText = '#OnThisDay, ' + todayText + ' in ' + prefixedContent;
 			break;
+		case ContentType.featuredEvent:
+			prefixedContent = prefixedContent.replace('</a> – ', '</a>:\n\n');
+			prefixedText = '#PicOfTheDay - #OnThisDay, ' + todayText + ' in ' + prefixedContent;
+			break;
 		case ContentType.holiday:
 			prefixedContent = 'the following holiday is observed:\n\n' + prefixedContent;
 			prefixedText = '#OnThisDay, ' + todayText + ', ' + prefixedContent;
@@ -993,6 +1055,8 @@ export {
 	loadArticle,
 	loadArticles,
 	loadArticleContent,
+	markArticleContentAsPosted,
+	getBlobFromImgUri,
 	checkIfContentAlreadyPostedForArticle,
 	prefixText,
 	stripHTMLElementsAndDecorateText,

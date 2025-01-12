@@ -5,7 +5,7 @@ import { parse } from 'node-html-parser';
 import { Article, Content } from '../classes/classes';
 import { log } from '../functions/utils';
 import { LogLevel, ContentType } from '../utils/enums';
-import { OnThisDayArticle, PicturedEvent } from '../utils/interfaces';
+import { OnThisDayArticle, PicturedEvent, Picture } from '../utils/interfaces';
 dotenv.config();
 
 const WIKIPEDIA_MAIN_URL = process.env.WIKIPEDIA_MAIN_URL! || 'https://en.wikipedia.org';
@@ -40,7 +40,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 		});
 
 		const articles = filteredArticles.map(item => {
-			const id = item.guid || item.link || item.id || item.title || '';
+			const id = item.isoDate;
 			const title = item.title || 'No title';
 			const contents = item.content || item.contentSnippet || item.summary || 'No content';
 			const link = item.link || item.id || '';
@@ -56,7 +56,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 		const contentList = new Array<Content>;
 
 		// push today text into our new content list
-		contentList.push(new Content(ContentType.todayText, await getOnThisDayTodayText(articles[0])));
+		contentList.push(new Content(ContentType.todayText, await getOnThisDayTodayText(articles[0]),null,true));
 
 		// push holiday entries into our new content list
 		for(const holiday of await getOnThisDayHolidays(articles[0])) {
@@ -65,7 +65,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 
 		// push featured event entries into our new content list
 		for(const featuredEvent of await getOnThisDayFeaturedEvents(articles[0])) {
-			contentList.push(new Content(ContentType.featuredEvent, featuredEvent.event, featuredEvent.imgUri, featuredEvent.imgAltText));
+			contentList.push(new Content(ContentType.featuredEvent, featuredEvent.event, featuredEvent.img));
 		}
 
 		// push event entries into our new content list
@@ -81,7 +81,7 @@ async function fetchOnThisDayArticle(): Promise<Article|null> {
 		log(LogLevel.DEBUG, 'Article ID:', articles[0].id);
 		log(LogLevel.TRACE, 'Content List for this article:', contentList);
 		
-		const article = new Article(articles[0].id, contentList);
+		const article = new Article(articles[0].id, articles[0].link, contentList);
 
 		log(LogLevel.TRACE, 'Returning article object:', article);
 		return article;
@@ -178,11 +178,21 @@ async function getOnThisDayFeaturedEvents(onThisDayArticle: OnThisDayArticle): P
 	for (const featuredEvent of featuredEventList) {
 		// find the corresponding picture for the featured event
 		// by searching for the <a> tag with the class "image"
-		const picture = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > #mp-otd-img > div > span > img');
-		const pictureUri = picture.getAttribute('src');
-		const pictureAltText = picture.getAttribute('alt');
+		log(LogLevel.TRACE, 'FeaturedEvent:', featuredEvent.toString());
+		const picture = parse(onThisDayArticle.contents).querySelector('.mw-parser-output > #mp-otd-img > div > span > a > img');
+		log(LogLevel.DEBUG, 'PictureNode:', picture.toString());
+		const pictureUri: string = 'https:' + picture.getAttribute('src');
+		const pictureAltText: string = picture.getAttribute('alt');
+		const pictureWidth: number = Number(picture.getAttribute('width'));
+		const pictureHeight: number = Number(picture.getAttribute('height'));
+		const img: Picture = {
+			uri: pictureUri,
+			alt: pictureAltText,
+			height: pictureHeight,
+			width: pictureWidth
+		}
 		log(LogLevel.DEBUG, 'Picture found:', pictureUri);
-		featuredEvents.push({ event: featuredEvent, imgUri: pictureUri, imgAltText: pictureAltText });
+		featuredEvents.push({ event: featuredEvent, img: img });
 	}
 	return featuredEvents;
 }
