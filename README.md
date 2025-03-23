@@ -13,18 +13,23 @@ An example post on Bluesky could look something like this:
 ## How to run?
 
 Simply run
-```
+
+```shell
 npm install
 ```
+
 and
-```
+
+```shell
 npm start
 ```
+
 and you should be good to go!
 
 ## Environment variables
 
 This app depends on a couple of environment variables. Some are required in order to run the bot, some are optional and will have default values. Required environment variables are marked with an asterisk \(**\***\)
+
 - `BLUESKY_HANDLE` **\***
   - The handle of your Bluesky Bot
 - `BLUESKY_PASSWORD` **\***

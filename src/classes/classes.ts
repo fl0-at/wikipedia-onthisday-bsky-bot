@@ -1,5 +1,5 @@
 import { ContentType } from '../utils/enums';
-import { AppBskyEmbedImages, AppBskyFeedPost, RichText } from '@atproto/api';
+import { AppBskyFeedPost, RichText } from '@atproto/api';
 import { Picture } from '../utils/interfaces';
 
 /**
@@ -84,7 +84,7 @@ class Article {
 class BlueskyPost {
 	$type!: string;
 	text: RichText["text"];
-	embeds?: AppBskyFeedPost.Record["embed"];
+	embed?: AppBskyFeedPost.Record["embed"];
 	facets?: RichText["facets"];
 	createdAt!: string;
 
@@ -98,7 +98,7 @@ class BlueskyPost {
 	constructor(text: RichText["text"], createdAt: string, embeds?: AppBskyFeedPost.Record["embed"], facets?: RichText["facets"] ) {
 		this.$type = 'app.bsky.feed.post';
 		this.text = text;
-		this.embeds = embeds;
+		this.embed = embeds;
 		this.facets = facets;
 		this.createdAt = createdAt;
 	}

@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
-import { AppBskyFeedPost, AtpAgent, BlobRef, Facet, RichText, UnicodeString } from '@atproto/api';
+import { AppBskyFeedPost, AtpAgent, Facet, RichText, UnicodeString } from '@atproto/api';
 import { LogLevel } from "../utils/enums";
-import { getBlobFromImgUri, log, markArticleContentAsPosted, prefixText, saveArticleContent, savePostToJSON, stripHTMLElementsAndDecorateText } from '../functions/utils';
+import { getBlobFromImgUri, log, markArticleContentAsPosted, prefixText, savePostToJSON, stripHTMLElementsAndDecorateText } from '../functions/utils';
 import { Link } from "../utils/interfaces";
 import { Article, BlueskyPost, Content } from "../classes/classes";
 import { Image } from "@atproto/api/src/client/types/app/bsky/embed/images";
@@ -181,19 +181,19 @@ async function preparePost(rawText: string, linkCollection: Array<Link>, imgColl
 
 		log(LogLevel.TRACE, 'Determined facets:', rt.facets == undefined ? 'undefined' : JSON.stringify(rt.facets, null , 2));
 
-		// create our img embeds
-		let embeds: AppBskyFeedPost.Record["embed"] = null;
+		// create our img embed
+		let embed: AppBskyFeedPost.Record["embed"] = null;
 		if (imgCollection) {
-			embeds = {
+			embed = {
 				$type: 'app.bsky.embed.images',
 				images: imgCollection
 			};
 		}
 
-		log(LogLevel.TRACE, 'Determined embeds:', embeds == undefined ? 'undefined' : JSON.stringify(embeds, null , 2));
+		log(LogLevel.TRACE, 'Determined embed:', embed == undefined ? 'undefined' : JSON.stringify(embed, null , 2));
 
 		// create the post record
-		const postRecord = new BlueskyPost(rt.text, new Date().toISOString(), embeds, rt.facets);
+		const postRecord = new BlueskyPost(rt.text, new Date().toISOString(), embed, rt.facets);
 		log(LogLevel.TRACE, 'Prepared post, post record:', JSON.stringify(postRecord, null, 2));
 		return postRecord;
 	} catch (error) {

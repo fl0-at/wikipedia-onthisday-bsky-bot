@@ -85,11 +85,9 @@ async function loadFromJSON(filename: string): Promise<Articles|Posts|void> {
 		
 		switch (filename) {
 			case ARTICLES_FILENAME:
-				const articles: Articles = JSON.parse(fileContent);
-				return articles;
-			case POSTS_FILENAME:
-				const posts: Posts = JSON.parse(fileContent);
-				return posts;
+				return JSON.parse(fileContent) as Articles;
+			case POSTS_FILENAME:				
+				return JSON.parse(fileContent) as Posts;
 			default:
 				throw new Error(`Invalid filename: ${filename}`);
 		}
@@ -159,10 +157,10 @@ async function markArticleContentAsPosted(article: Article, content: Content): P
 		let loadedArticles = await loadArticles();
 		
 		// find the article we need to update
-		let articleToUpdate: Article = loadedArticles.find((art: { id: string }) => art.id === article.id);
+		const articleToUpdate: Article = loadedArticles.find((art: { id: string }) => art.id === article.id);
 
 		// find the content we need to update
-		let contentToUpdate: Content = articleToUpdate.contentList.find((con: Content) => con.value === content.value);
+		const contentToUpdate: Content = articleToUpdate.contentList.find((con: Content) => con.value === content.value);
 
 		// update the content to posted: true
 		contentToUpdate.alreadyPosted = true;
@@ -889,9 +887,9 @@ async function prefixText(article: Article, content: Content): Promise<string> {
 	switch (content.type) {
 		case ContentType.anniversary:
 			// we want to prefix the line with an emoji, depending on whether the person died or was born
-			if(content.value.includes('<abbr title=\"born\">')) {
+			if(content.value.includes('<abbr title="born">')) {
 				prefixedContent = '<<BORN>> ' + prefixedContent;
-			} else if(content.value.includes('<abbr title=\"died\">')) {
+			} else if(content.value.includes('<abbr title="died">')) {
 				prefixedContent = '<<DIED>> ' + prefixedContent;
 			}
 			prefixedText = '#Anniversary - #OnThisDay, ' + todayText + ':\n\n' + prefixedContent;
@@ -1038,7 +1036,7 @@ function isValidCronNotation(cron: string): boolean {
 		log(LogLevel.WARNING, 'Using default values instead...');
 		return false;
 	}
-	const regEx = /((((\d+,)+\d+|([\d\*]+(\/|-)\d+)|\d+|\*) ?){5,6})/;
+	const regEx = /((((\d+,)+\d+|([\d*]+(\/|-)\d+)|\d+|\*) ?){5,6})/;
 	const validCron = cron.match(regEx)? true : false;
 	if (!validCron)	{
 		log(LogLevel.WARNING, 'Invalid cron schedule:', cron);
