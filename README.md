@@ -13,18 +13,23 @@ An example post on Bluesky could look something like this:
 ## How to run?
 
 Simply run
-```
+
+```shell
 npm install
 ```
+
 and
-```
+
+```shell
 npm start
 ```
+
 and you should be good to go!
 
 ## Environment variables
 
 This app depends on a couple of environment variables. Some are required in order to run the bot, some are optional and will have default values. Required environment variables are marked with an asterisk \(**\***\)
+
 - `BLUESKY_HANDLE` **\***
   - The handle of your Bluesky Bot
 - `BLUESKY_PASSWORD` **\***
@@ -43,7 +48,7 @@ This app depends on a couple of environment variables. Some are required in orde
 - `CRON_SCHEDULE`
   - you can define the schedule based on [node-schedule cron notation][3] with this variable
   - 5 and 6 digit cron notation is supported
-  - example: `* 30 */2 * *` => every 2nd hour at 30 minutes past the hour
+  - example: `0 30 */2 * *` => every 2nd hour at 30 minutes past the hour and 0 seconds
   - defaults to `0 */2 * * *` => every 2nd hour
   - _**NOTE:** if you supply an invalid cron schedule, the default value will be used!_
 - `WIKIPEDIA_MAIN_URL`

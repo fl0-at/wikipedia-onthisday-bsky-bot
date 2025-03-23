@@ -33,63 +33,198 @@ dotenv.config();
  */
 
 /**
- * Initialize the articles database
+ * Initialize the JSON file
  * @returns {Promise<void>}
  */
-async function initializeDb(): Promise<void> {
+async function initializeJSON(filename: string): Promise<void> {
 	try {
-		log(LogLevel.DEBUG, 'Initializing DB...');
-		await fs.writeFile(
-			DB_PATH + '/' + ARTICLES_FILENAME,
-			JSON.stringify(JSON.parse('{"articles": []}'), null, 2)
-		);
+		log(LogLevel.DEBUG, 'Determining file type...');
+		switch (filename) {
+			case ARTICLES_FILENAME:
+				log(LogLevel.DEBUG, `Initializing ${filename}...`);
+				await fs.writeFile(
+					DB_PATH + '/' + filename,
+					JSON.stringify(JSON.parse('{"articles": []}'), null, 2)
+				);
+				break;
+			case POSTS_FILENAME:
+				log(LogLevel.DEBUG, `Initializing ${filename}...`);
+				await fs.writeFile(
+					DB_PATH + '/' + filename,
+					JSON.stringify(JSON.parse('{"posts": []}'), null, 2)
+				);
+				break;
+			default:
+				log(LogLevel.ERROR, 'Invalid filename:', filename);
+				throw new Error(`Invalid filename: ${filename}`);
+				break;
+		}
 	} catch (error) {
 		if (error.code === 'ENOENT') {
 			await fs.mkdir(DB_PATH);
-			await initializeDb();
+			await initializeJSON(filename);
 		} else {
-			log(LogLevel.CRITICAL, 'Failed to initialize DB:', error);
-			throw new Error(`Failed to initialize DB: ${error}`);
+			log(LogLevel.CRITICAL, `Failed to initialize ${filename}:`, error);
+			throw new Error(`Failed to initialize ${filename}: ${error}`);
 		}
 	}
 }
 
 /**
- * Load the articles database
- * @returns {Promise<Articles>}
+ * Load the JSON file
+ * @returns {Promise<Articles|Posts|void>}
  */
-async function loadFromDb(): Promise<Articles> {
+async function loadFromJSON(filename: string): Promise<Articles|Posts|void> {
 	try {
-		const fileContent: string = await fs.readFile(DB_PATH + '/' + ARTICLES_FILENAME, 'utf-8');
+		const fileContent: string = await fs.readFile(DB_PATH + '/' + filename, 'utf-8');
 
-		// if the file is empty, initialize our DB
+		// if the file is empty, initialize the JSON file
 		if (fileContent === '') {
-			await initializeDb();
+			await initializeJSON(filename);
 		}
-
-		const DB: Articles = JSON.parse(fileContent);
-		return DB;
+		
+		switch (filename) {
+			case ARTICLES_FILENAME:
+				return JSON.parse(fileContent) as Articles;
+			case POSTS_FILENAME:				
+				return JSON.parse(fileContent) as Posts;
+			default:
+				throw new Error(`Invalid filename: ${filename}`);
+		}
 	} catch (error) {
 		if (error.code === 'ENOENT') {
-			await initializeDb();
-			return JSON.parse(await fs.readFile(DB_PATH + '/' + ARTICLES_FILENAME, 'utf-8'));
+			await initializeJSON(filename);
+			return JSON.parse(await fs.readFile(DB_PATH + '/' + filename, 'utf-8'));
 		} else {
-			log(LogLevel.CRITICAL, 'Failed to load DB from local filesystem:', error);
+			log(LogLevel.CRITICAL, `Failed to load ${filename} from local filesystem:`, error);
+			return;
 		}
 	}
 
 }
 
 /**
- * Save the articles database
- * @param {Articles} DB - The articles database
+ * Saves articles to JSON
+ * @param {Articles} obj - The articles to be saved to JSON
+ */
+async function saveToJSON(obj: Articles): Promise<void>;
+/**
+ * Saves posts to JSON
+ * @param {Posts} obj - The posts to be saved to JSON
+ */
+async function saveToJSON(obj: Posts): Promise<void>;
+/**
+ * Save the object to the database
+ * @param {Articles|Posts} obj - The object to be saved
  * @returns {Promise<void>}
  */
-async function saveToDb(DB: Articles): Promise<void> {
+async function saveToJSON(obj: Articles|Posts): Promise<void> {
 	try {
-		await fs.writeFile(DB_PATH + '/' + ARTICLES_FILENAME, JSON.stringify(DB, null, 2), 'utf-8');
+		let filename: string = undefined;
+		if (isArticles(obj)) {
+			log(LogLevel.DEBUG, 'Determined file type:', 'Articles');
+			filename = ARTICLES_FILENAME;
+		} else if (isPosts(obj)) {
+			log(LogLevel.DEBUG, 'Determined file type:', 'Posts');
+			filename = POSTS_FILENAME;
+		} else {
+			log(LogLevel.ERROR, 'Failed to determine file type!');
+			throw new Error('Invalid object type');
+		}
+		// write the file
+		if(!filename || filename === undefined) {
+			log(LogLevel.ERROR, 'Invalid file name:', filename);
+			throw new Error(`Invalid file name: ${filename}`);
+		}		
+		log(LogLevel.DEBUG, 'Trying to write file:', DB_PATH + '/' + filename);
+		await fs.writeFile(DB_PATH + '/' + filename, JSON.stringify(obj, null, 2), 'utf-8');
 	} catch (error) {
-		log(LogLevel.CRITICAL, 'Failed to save DB to local filesystem:', error);
+		log(LogLevel.CRITICAL, `Failed to save ${typeof obj} ${JSON.stringify(obj,null,2)} to local filesystem:`, error);
+	}
+}
+
+function isArticles(obj: Articles|Posts): obj is Articles {
+	return (obj as Articles).articles !== undefined;
+}
+
+function isPosts(obj: Articles|Posts): obj is Posts {
+	return (obj as Posts).posts !== undefined;
+}
+
+async function markArticleContentAsPosted(article: Article, content: Content): Promise<void> {
+	try {
+		// load articles
+		let loadedArticles = await loadArticles();
+		
+		// find the article we need to update
+		const articleToUpdate: Article = loadedArticles.find((art: { id: string }) => art.id === article.id);
+
+		// find the content we need to update
+		const contentToUpdate: Content = articleToUpdate.contentList.find((con: Content) => con.value === content.value);
+
+		// update the content to posted: true
+		contentToUpdate.alreadyPosted = true;
+
+		// update the article's content list
+		articleToUpdate.contentList = articleToUpdate.contentList.map(c => c.value !== contentToUpdate.value ? c : contentToUpdate);
+
+		// update the article array
+		loadedArticles = loadedArticles.map(a => a.id !== articleToUpdate.id ? a : articleToUpdate );
+
+		// create new articles JSON obj
+		const articles: Articles = { articles: loadedArticles };
+
+		// save the articles again
+		await saveToJSON(articles);
+		
+	} catch (error) {
+		log(LogLevel.ERROR, `Failed to mark content inside article as "posted":`, error);
+		throw new Error(`Failed to mark content inside article as "posted": ${error}`);
+	}
+	return;
+}
+
+/**
+ * A helper function to get a blob from an image URI
+ * @param {string} imgUri - The URI of the image you want to receive a blob for
+ * @returns {Promise<Blob>}
+ */
+async function getBlobFromImgUri(imgUri: string): Promise<Blob> {
+	log(LogLevel.DEBUG, 'Received img URI:', imgUri);
+	const blob: Promise<Blob> = (await fetch(imgUri)).blob();
+	log(LogLevel.DEBUG, 'Fetched blob:', await blob);
+	return blob;
+}
+
+/**
+ * Save the article to a JSON file
+ * @param {Article} article 
+ * @returns {Promise<void>}
+ */
+async function saveArticleToJSON(article: Article): Promise<void> {
+	try {
+		// we will save the entire article to a JSON file
+		const newArticle: Article = new Article(article.id, article.url, article.contentList);
+		log(LogLevel.DEBUG, 'Saving article to JSON:', newArticle);
+
+		// load the JSON file
+		const articleJSON: Articles = await loadFromJSON(ARTICLES_FILENAME) as Articles;
+
+		log(LogLevel.TRACE, 'Reading JSON through FS:', await fs.readFile(DB_PATH + '/' + ARTICLES_FILENAME, 'utf-8'));
+		log(LogLevel.TRACE, 'articleJSON.articles:', articleJSON.articles);
+		// check if the article ID exists already
+		if (articleJSON.articles != undefined && articleJSON.articles.find((art: { id: string }) => art.id === newArticle.id)) {
+			return;
+		}
+		articleJSON.articles.push(newArticle);
+		await saveToJSON(articleJSON);
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			await initializeJSON(ARTICLES_FILENAME);
+			await saveArticleToJSON(article);
+		} else {
+			log(LogLevel.ERROR, 'Failed to save article:', error);
+		}
 	}
 }
 
@@ -101,23 +236,23 @@ async function saveToDb(DB: Articles): Promise<void> {
 async function saveArticleWithoutContents(article: Article): Promise<void> {
 	try {
 		// need to just write the "bare" article, without contents
-		const articleWithoutContent: Article = new Article(article.id, []);
-		log(LogLevel.DEBUG, 'Saving barebones article to DB:', articleWithoutContent);
+		const articleWithoutContent: Article = new Article(article.id, article.url, []);
+		log(LogLevel.DEBUG, 'Saving barebones article to JSON:', articleWithoutContent);
 
-		// load the DB
-		const DB: Articles = await loadFromDb();
+		// load the JSON file
+		const json: Articles = await loadFromJSON(ARTICLES_FILENAME) as Articles;
 
 		log(LogLevel.TRACE, 'Reading DB through FS:', await fs.readFile(DB_PATH + '/' + ARTICLES_FILENAME, 'utf-8'));
-		log(LogLevel.TRACE, 'DB.articles:', DB.articles);
+		log(LogLevel.TRACE, 'DB.articles:', json.articles);
 		// check if the article ID exists already
-		if (DB.articles != undefined && DB.articles.find((art: { id: string }) => art.id === articleWithoutContent.id)) {
+		if (json.articles != undefined && json.articles.find((art: { id: string }) => art.id === articleWithoutContent.id)) {
 			return;
 		}
-		DB.articles.push(articleWithoutContent);
-		await saveToDb(DB);
+		json.articles.push(articleWithoutContent);
+		await saveToJSON(json);
 	} catch (error) {
 		if (error.code === 'ENOENT') {
-			await initializeDb();
+			await initializeJSON(ARTICLES_FILENAME);
 			await saveArticleWithoutContents(article);
 		} else {
 			log(LogLevel.ERROR, 'Failed to save article:', error);
@@ -134,17 +269,17 @@ async function saveArticleWithoutContents(article: Article): Promise<void> {
 async function saveArticleContent(article: Article, content: Content): Promise<void> {
 	try {
 
-		// load the DB
-		const DB: Articles = await loadFromDb();
+		// load the JSON file
+		const json: Articles = await loadFromJSON(ARTICLES_FILENAME) as Articles;
 
 		// need to add content to article
-		const indexForUpdate = DB.articles.findIndex((art: { id: string }) => art.id === article.id);
+		const indexForUpdate = json.articles.findIndex((art: { id: string }) => art.id === article.id);
 		if (indexForUpdate === -1) throw new Error(`Cannot find article with ID ${article.id}`);
 
-		const curArt = new Article(article.id, DB.articles[indexForUpdate].contentList);
+		const curArt = new Article(article.id, article.url, json.articles[indexForUpdate].contentList);
 		// need to check if to be saved content already exists
 		let isDuplicateContent = false;
-		for (const con of DB.articles[indexForUpdate].contentList) {
+		for (const con of json.articles[indexForUpdate].contentList) {
 			if (con == content) isDuplicateContent = true;
 		}
 		// for some reason I get duplicate content entries
@@ -157,11 +292,11 @@ async function saveArticleContent(article: Article, content: Content): Promise<v
 		}
 
 		log(LogLevel.DEBUG, 'Saving content for article with ID:', article.id);
-		log(LogLevel.TRACE, 'Saving the following content list:', DB.articles[indexForUpdate].contentList);
+		log(LogLevel.TRACE, 'Saving the following content list:', json.articles[indexForUpdate].contentList);
 
-		DB.articles[indexForUpdate] = curArt;
-		log(LogLevel.TRACE, 'Saving the following DB to local FS:', DB);
-		await saveToDb(DB);
+		json.articles[indexForUpdate] = curArt;
+		log(LogLevel.TRACE, 'Saving the following JSON to local FS:', json);
+		await saveToJSON(json);
 
 	} catch (error) {
 		log(LogLevel.ERROR, 'Failed to save posted article content:', error);
@@ -169,15 +304,15 @@ async function saveArticleContent(article: Article, content: Content): Promise<v
 }
 
 /**
- * Load all articles from the database
+ * Load all articles
  * @returns {Promise<Article[]>}
  */
 async function loadArticles(): Promise<Article[]> {
 	try {
 
-		// load the DB
-		const DB: Articles = await loadFromDb();
-		const allArticles: Array<Article> = DB.articles;
+		// load the JSON file
+		const json: Articles = await loadFromJSON(ARTICLES_FILENAME) as Articles;
+		const allArticles: Array<Article> = json.articles;
 		return allArticles;
 	} catch (error) {
 		if (error.code === 'ENOENT') {
@@ -197,9 +332,9 @@ async function loadArticles(): Promise<Article[]> {
 async function loadArticle(id: string): Promise<Article> {
 	try {
 
-		// load the DB
-		const DB: Articles = await loadFromDb();
-		const article: Article | null = DB.articles.find((art: { id: string }) => art.id === id);
+		// load the JSON file
+		const json: Articles = await loadFromJSON(ARTICLES_FILENAME) as Articles;
+		const article: Article | null = json.articles.find((art: { id: string }) => art.id === id);
 		if (article === undefined || article === null) return null;
 		return article;
 	} catch (error) {
@@ -220,10 +355,9 @@ async function loadArticle(id: string): Promise<Article> {
 async function loadArticleContent(article: Article): Promise<Content[]> {
 	try {
 		// need to just read that one article
-		//const articleFromDB: Article = DB.articles.find((art: { id: string }) => art.id === article.id);
-		const articleFromDB: Article | null = await loadArticle(article.id);
-		if (articleFromDB === null) return [];
-		return articleFromDB.contentList;
+		const loadedArticle: Article | null = await loadArticle(article.id);
+		if (loadedArticle === null) return [];
+		return loadedArticle.contentList;
 	} catch (error) {
 		if (error.code === 'ENOENT') {
 			return [];
@@ -238,17 +372,17 @@ async function loadArticleContent(article: Article): Promise<Content[]> {
  * Check if the content has already been posted for the article
  * @param {Article} article 
  * @param {Content} content 
- * @returns 
+ * @returns {Promise<boolean>}
+ * @deprecated This function has been deprecated as of 1.1.0
  */
-async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content) {
+async function checkIfContentAlreadyPostedForArticle(article: Article, content: Content): Promise<boolean> {
 	try {
 		// need to just read that one article
-		//const postedArticle: Article = DB.articles.find((art: { id: string }) => art.id === article.id);
 		const postedArticle: Article | null = await loadArticle(article.id);
 		if (postedArticle === null || postedArticle === undefined) return false;
 		const postedArticleContentList: Array<Content> = await loadArticleContent(postedArticle);
 		const postedContent: Content = postedArticleContentList.find((posCon: { value: string, type: ContentType }) => posCon.type === content.type && posCon.value === content.value);
-		if (!postedContent) return false;
+		if (!postedContent.alreadyPosted) return false;
 		return true;
 	} catch (error) {
 		if (error.code === 'ENOENT') {
@@ -268,23 +402,6 @@ async function checkIfContentAlreadyPostedForArticle(article: Article, content: 
 async function stripHTMLElementsAndDecorateText(content: string): Promise<{ contentRaw: string; linkCollection: Link[]; }> {
 	let contentRaw = content;
 
-	// first, create a link collection object so we
-	// don't lose the context of the links
-	const linkCollection = new Array<Link>;
-	const aHrefNodes = parse(contentRaw).querySelectorAll('a');
-
-	// push those links into a link collection
-	// and then replace HTML links with text only
-	for (const aHref of aHrefNodes) {
-		linkCollection.push({
-			text: aHref.innerText,
-			url: WIKI_URL + aHref.getAttribute('href')
-		});
-		// strip the HTML tags and replace with just the text
-		contentRaw = contentRaw.replace(aHref.toString(), aHref.innerText);
-		log(LogLevel.DEBUG, 'linkText:', aHref.innerText, 'WIKI_URL:', WIKI_URL + aHref.getAttribute('href'));
-	}
-
 	// strip weird characters
 
 	// \n
@@ -292,6 +409,7 @@ async function stripHTMLElementsAndDecorateText(content: string): Promise<{ cont
 
 	// &#160;
 	contentRaw = contentRaw.replace('&#160;', ' ');
+	contentRaw = contentRaw.replace('&#8722;', '−');
 
 	// now strip all remaining HTML tags
 
@@ -325,16 +443,41 @@ async function stripHTMLElementsAndDecorateText(content: string): Promise<{ cont
 		}
 	}
 
-	// need to strip <i> completely - usually the 
-	// feed tells us that for this post there is
-	// a picture that goes with this
-	// future improvement - make a separate type of post
-	// for the "featured" event of the day with the picture
+	// need to strip <i> only if it references a picture 
+	// that goes with the post
 	const iHTMLNodes = parse(contentRaw).querySelectorAll('i');
 	for (const i of iHTMLNodes) {
-		contentRaw = contentRaw.replace(' '+i.toString(), '');
+		// bugfix for issue #1:
+		// https://github.com/fl0-at/wikipedia-onthisday-bsky-bot/issues/1
+		if (i.innerHTML.includes('pictured')) {
+			contentRaw = contentRaw.replace(i.toString(), '');
+		} else {
+			contentRaw = contentRaw.replace(i.toString(), i.innerHTML);
+		}
 	}
 
+	// future improvement - make a separate type of post
+	// for the "featured" event of the day with the picture
+	/*
+		maybe in the future we could 
+		parse the picture and attach it 
+		to the post somehow?
+	*/
+
+	// <sup> and <sub>
+	// this is a bit tricky, because we need to replace
+	// the HTML tags for superscript and subscript with
+	// actual characters in unicode, using custom functions
+	// bugfix for issue #4:
+	// https://github.com/fl0-at/wikipedia-onthisday-bsky-bot/issues/4
+	const supHTMLNodes = parse(contentRaw).querySelectorAll('sup');
+	for (const sup of supHTMLNodes) {
+		contentRaw = contentRaw.replace(sup.toString(), await convertToSuperscript(sup.innerHTML));
+	}
+	const subHTMLNodes = parse(contentRaw).querySelectorAll('sub');
+	for (const sub of subHTMLNodes) {
+		contentRaw = contentRaw.replace(sub.toString(), await convertToSubscript(sub.innerHTML));
+	}
 	// to clean up, let's replace all "double spaces"
 	// with single ones and make sure there are no
 	// spaces before or after parentheses
@@ -354,11 +497,26 @@ async function stripHTMLElementsAndDecorateText(content: string): Promise<{ cont
 		contentRaw = contentRaw.replace('<<YEARSAGO>>', yearsAgo.toString() + ' years ago');
 	}
 
-	/*
-		maybe in the future we could 
-		parse the picture and attach it 
-		to the post somehow?
-	*/
+	// moved the link collection creation to the end of our function
+	// as part of bugfix for issue #2:
+	// https://github.com/fl0-at/wikipedia-onthisday-bsky-bot/issues/2
+
+	// let's create a link collection object 
+	// so we don't lose the context of the links
+	const linkCollection = new Array<Link>;
+	const aHrefNodes = parse(contentRaw).querySelectorAll('a');
+
+	// push those links into a link collection
+	// and then replace HTML links with text only
+	for (const aHref of aHrefNodes) {
+		linkCollection.push({
+			text: aHref.innerText,
+			url: WIKI_URL + aHref.getAttribute('href')
+		});
+		// strip the HTML tags and replace with just the text
+		contentRaw = contentRaw.replace(aHref.toString(), aHref.innerText);
+		log(LogLevel.DEBUG, 'linkText:', aHref.innerText, 'WIKI_URL:', WIKI_URL + aHref.getAttribute('href'));
+	}
 
 	// decorate our text with a nice calendar emoji
 	// the decorator function might be enhanced
@@ -371,6 +529,331 @@ async function stripHTMLElementsAndDecorateText(content: string): Promise<{ cont
 	| in the reponse of this function		   	   |
 	\**********************************************/
 	return { contentRaw, linkCollection };
+}
+
+/**
+ * Convert text to subscript
+ * @param {string} text 
+ * @returns {Promise<string>}
+ */
+async function convertToSubscript(text: string): Promise<string> {
+    for (const character of text) {
+        let subscriptCharacter = character;
+        switch (character) {
+            case '0':
+                // ₀
+                subscriptCharacter = '₀';
+                break;
+            case '1':
+                // ₁
+                subscriptCharacter = '₁';
+                break;
+            case '2':
+                // ₂
+                subscriptCharacter = '₂';
+                break;
+            case '3':
+                // ₃
+                subscriptCharacter = '₃';
+                break;
+            case '4':
+                // ₄
+                subscriptCharacter = '₄';
+                break;
+            case '5':
+                // ₅
+                subscriptCharacter = '₅';
+                break;
+            case '6':
+                // ₆
+                subscriptCharacter = '₆';
+                break;
+            case '7':
+                // ₇
+                subscriptCharacter = '₇';
+                break;
+            case '8':
+                // ₈
+                subscriptCharacter = '₈';
+                break;
+            case '9':
+                // ₉
+                subscriptCharacter = '₉';
+                break;
+            case '+':
+                // ₊
+                subscriptCharacter = '₊';
+                break;
+            case '-':
+                // ₋
+                subscriptCharacter = '₋';
+                break;
+            case '=':
+                // ₌
+                subscriptCharacter = '₌';
+                break;
+            case '(':
+                // ₍
+                subscriptCharacter = '₍';
+                break;
+            case ')':
+                // ₎
+                subscriptCharacter = '₎';
+                break;
+            case 'a':
+                // ₐ
+                subscriptCharacter = 'ₐ';
+                break;
+            case 'e':
+                // ₑ
+                subscriptCharacter = 'ₑ';
+                break;
+            case 'h':
+                // ₕ
+                subscriptCharacter = 'ₕ';
+                break;
+            case 'i':
+                // ᵢ
+                subscriptCharacter = 'ᵢ';
+                break;
+            case 'j':
+                // ⱼ
+                subscriptCharacter = 'ⱼ';
+                break;
+            case 'k':
+                // ₖ
+                subscriptCharacter = 'ₖ';
+                break;
+            case 'l':
+                // ₗ
+                subscriptCharacter = 'ₗ';
+                break;
+            case 'm':
+                // ₘ
+                subscriptCharacter = 'ₘ';
+                break;
+            case 'n':
+                // ₙ
+                subscriptCharacter = 'ₙ';
+                break;
+            case 'o':
+                // ₒ
+                subscriptCharacter = 'ₒ';
+                break;
+            case 'p':
+                // ₚ
+                subscriptCharacter = 'ₚ';
+                break;
+            case 'r':
+                // ᵣ
+                subscriptCharacter = 'ᵣ';
+                break;
+            case 's':
+                // ₛ
+                subscriptCharacter = 'ₛ';
+                break;
+            case 't':
+                // ₜ
+                subscriptCharacter = 'ₜ';
+                break;
+            case 'u':
+                // ᵤ
+                subscriptCharacter = 'ᵤ';
+                break;
+            case 'v':
+                // ᵥ
+                subscriptCharacter = 'ᵥ';
+                break;
+            case 'x':
+                // ₓ
+                subscriptCharacter = 'ₓ';
+                break;
+            default:
+                break;
+        }
+        text = text.replace(character, subscriptCharacter);
+    }
+    
+    return text;
+}
+
+/**
+ * Convert text to superscript
+ * @param {string} text 
+ * @returns {Promise<string>}
+ */
+async function convertToSuperscript(text: string): Promise<string> {
+	
+	for (const character of text) {
+		let superscriptCharacter = character;
+		switch (character) {
+			case '0':
+				// ⁰
+				superscriptCharacter = '⁰';
+				break;
+			case '1':
+				// ¹
+				superscriptCharacter = '¹';
+				break;
+			case '2':
+				// ²
+				superscriptCharacter = '²';
+				break;
+			case '3':
+				// ³
+				superscriptCharacter = '³';
+				break;
+			case '4':
+				// ⁴
+				superscriptCharacter = '⁴';
+				break;
+			case '5':
+				// ⁵
+				superscriptCharacter = '⁵';
+				break;
+			case '6':
+				// ⁶
+				superscriptCharacter = '⁶';
+				break;
+			case '7':
+				// ⁷
+				superscriptCharacter = '⁷';
+				break;
+			case '8':
+				// ⁸
+				superscriptCharacter = '⁸';
+				break;
+			case '9':
+				// ⁹
+				superscriptCharacter = '⁹';
+				break;
+			case '+':
+				// ⁺
+				superscriptCharacter = '⁺';
+				break;
+			case '-':
+				// ⁻
+				superscriptCharacter = '⁻';
+				break;
+			case '=':
+				// ⁼
+				superscriptCharacter = '⁼';
+				break;
+			case '(':
+				// ⁽
+				superscriptCharacter = '⁽';
+				break;
+			case ')':
+				// ⁾
+				superscriptCharacter = '⁾';
+				break;
+			case 'a':
+				// ᵃ
+				superscriptCharacter = 'ᵃ';
+				break;
+			case 'b':
+				// ᵇ
+				superscriptCharacter = 'ᵇ';
+				break;
+			case 'c':
+				// ᶜ
+				superscriptCharacter = 'ᶜ';
+				break;
+			case 'd':
+				// ᵈ
+				superscriptCharacter = 'ᵈ';
+				break;
+			case 'e':
+				// ᵉ
+				superscriptCharacter = 'ᵉ';
+				break;
+			case 'f':
+				// ᶠ
+				superscriptCharacter = 'ᶠ';
+				break;
+			case 'g':
+				// ᵍ
+				superscriptCharacter = 'ᵍ';
+				break;
+			case 'h':
+				// ʰ
+				superscriptCharacter = 'ʰ';
+				break;
+			case 'i':
+				// ⁱ
+				superscriptCharacter = 'ⁱ';
+				break;
+			case 'j':
+				// ʲ
+				superscriptCharacter = 'ʲ';
+				break;
+			case 'k':
+				// ᵏ
+				superscriptCharacter = 'ᵏ';
+				break;
+			case 'l':
+				// ˡ
+				superscriptCharacter = 'ˡ';
+				break;
+			case 'm':
+				// ᵐ
+				superscriptCharacter = 'ᵐ';
+				break;
+			case 'n':
+				// ⁿ
+				superscriptCharacter = 'ⁿ';
+				break;
+			case 'o':
+				// ᵒ
+				superscriptCharacter = 'ᵒ';
+				break;
+			case 'p':
+				// ᵖ
+				superscriptCharacter = 'ᵖ';
+				break;
+			case 'r':
+				// ʳ
+				superscriptCharacter = 'ʳ';
+				break;
+			case 's':
+				// ˢ
+				superscriptCharacter = 'ˢ';
+				break;
+			case 't':
+				// ᵗ
+				superscriptCharacter = 'ᵗ';
+				break;
+			case 'u':
+				// ᵘ
+				superscriptCharacter = 'ᵘ';
+				break;
+			case 'v':
+				// ᵛ
+				superscriptCharacter = 'ᵛ';
+				break;
+			case 'w':
+				// ʷ
+				superscriptCharacter = 'ʷ';
+				break;
+			case 'x':
+				// ˣ
+				superscriptCharacter = 'ˣ';
+				break;
+			case 'y':
+				// ʸ
+				superscriptCharacter = 'ʸ';
+				break;
+			case 'z':
+				// ᶻ
+				superscriptCharacter = 'ᶻ';
+				break;
+			default:
+				break;
+		}
+		text = text.replace(character, superscriptCharacter);
+	}
+
+	return text;
 }
 
 /**
@@ -404,9 +887,9 @@ async function prefixText(article: Article, content: Content): Promise<string> {
 	switch (content.type) {
 		case ContentType.anniversary:
 			// we want to prefix the line with an emoji, depending on whether the person died or was born
-			if(content.value.includes('<abbr title=\"born\">')) {
+			if(content.value.includes('<abbr title="born">')) {
 				prefixedContent = '<<BORN>> ' + prefixedContent;
-			} else if(content.value.includes('<abbr title=\"died\">')) {
+			} else if(content.value.includes('<abbr title="died">')) {
 				prefixedContent = '<<DIED>> ' + prefixedContent;
 			}
 			prefixedText = '#Anniversary - #OnThisDay, ' + todayText + ':\n\n' + prefixedContent;
@@ -414,6 +897,10 @@ async function prefixText(article: Article, content: Content): Promise<string> {
 		case ContentType.event:
 			prefixedContent = prefixedContent.replace('</a> – ', '</a>:\n\n');
 			prefixedText = '#OnThisDay, ' + todayText + ' in ' + prefixedContent;
+			break;
+		case ContentType.featuredEvent:
+			prefixedContent = prefixedContent.replace('</a> – ', '</a>:\n\n');
+			prefixedText = '#PicOfTheDay - #OnThisDay, ' + todayText + ' in ' + prefixedContent;
 			break;
 		case ContentType.holiday:
 			prefixedContent = 'the following holiday is observed:\n\n' + prefixedContent;
@@ -446,27 +933,24 @@ async function decorateText(text: string): Promise<string> {
 async function savePostToJSON(newPost: BlueskyPost) {
 	try {
 		// load the saved postings file if it exists
-		const pFromFile: Posts = JSON.parse((await fs.readFile(DB_PATH + '/' + POSTS_FILENAME)).toString());
+		const pFromFile: Posts = await loadFromJSON(POSTS_FILENAME) as Posts;
+		// create a new array to hold the posts
 		const pArr: Array<BlueskyPost> = [];
-		if (pFromFile.postings.length > 0) {
-			const postings: Array<BlueskyPost> = pFromFile.postings;
-			for (const posting of postings) {
-				pArr.push(posting);
+		if (pFromFile.posts.length > 0) {
+			const postList: Posts = { "posts": pFromFile.posts };
+			for (const post of postList.posts) {
+				pArr.push(post);
 			}
 		}
 		pArr.push(newPost);
-		const postings: Array<BlueskyPost> = pArr;
-		const pJSON = {
-			postings
-		}
-		await fs.writeFile(DB_PATH + '/' + POSTS_FILENAME, JSON.stringify(pJSON, null, 2));
-
+		const posts: Posts = { "posts": pArr };
+		await saveToJSON(posts);
 	} catch (error) {
 		if (error.code === 'ENOENT') {
-			// this means the postings file does not exist yet
+			// this means the posts file does not exist yet
 			// we need to create it
-			log(LogLevel.DEBUG, 'Creating new postings file...');
-			await fs.writeFile(DB_PATH + '/' + POSTS_FILENAME, JSON.stringify(JSON.parse('{"postings": []}'), null, 2));
+			log(LogLevel.DEBUG, 'Creating new posts file...');
+			await initializeJSON(POSTS_FILENAME);
 			await savePostToJSON(newPost);
 		} else {
 			log(LogLevel.ERROR, 'Failed to save post to JSON:', error);
@@ -546,13 +1030,13 @@ async function log(level: LogLevel | string, message: string, ...optionalParams:
  * @param {string} cron - The cron schedule
  * @returns {boolean}
  */
-function verifyCronNotation(cron: string): boolean {
+function isValidCronNotation(cron: string): boolean {
 	if (cron === '' || cron === undefined || cron === null) {
 		log(LogLevel.WARNING, 'Empty cron schedule detected!');
 		log(LogLevel.WARNING, 'Using default values instead...');
 		return false;
 	}
-	const regEx = /((((\d+,)+\d+|([\d\*]+(\/|-)\d+)|\d+|\*) ?){5,6})/;
+	const regEx = /((((\d+,)+\d+|([\d*]+(\/|-)\d+)|\d+|\*) ?){5,6})/;
 	const validCron = cron.match(regEx)? true : false;
 	if (!validCron)	{
 		log(LogLevel.WARNING, 'Invalid cron schedule:', cron);
@@ -563,15 +1047,18 @@ function verifyCronNotation(cron: string): boolean {
 }
 
 export {
+	saveArticleToJSON,
 	saveArticleWithoutContents,
 	saveArticleContent,
 	loadArticle,
 	loadArticles,
 	loadArticleContent,
+	markArticleContentAsPosted,
+	getBlobFromImgUri,
 	checkIfContentAlreadyPostedForArticle,
 	prefixText,
 	stripHTMLElementsAndDecorateText,
 	savePostToJSON,
 	log,
-	verifyCronNotation
+	isValidCronNotation
 };

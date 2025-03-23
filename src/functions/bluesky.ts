@@ -1,11 +1,10 @@
 import dotenv from "dotenv";
-import { AtpAgent, Facet } from '@atproto/api';
+import { AppBskyFeedPost, AtpAgent, Facet, RichText, UnicodeString } from '@atproto/api';
 import { LogLevel } from "../utils/enums";
-import { log, prefixText, saveArticleContent, savePostToJSON, stripHTMLElementsAndDecorateText } from '../functions/utils';
-import { RichText } from '@atproto/api';
-import { UnicodeString } from "@atproto/api";
+import { getBlobFromImgUri, log, markArticleContentAsPosted, prefixText, savePostToJSON, stripHTMLElementsAndDecorateText } from '../functions/utils';
 import { Link } from "../utils/interfaces";
 import { Article, BlueskyPost, Content } from "../classes/classes";
+import { Image } from "@atproto/api/src/client/types/app/bsky/embed/images";
 
 dotenv.configDotenv();
 
@@ -75,13 +74,16 @@ async function postToBluesky(post: BlueskyPost): Promise<void> {
 }
 
 /**
- * Prepare the post by auto-detecting facets and also adding custom facets, based on a rawText string and a linkCollection array that implements the LinkCollection interface.
+ * Prepare the post by auto-detecting facets and also adding custom facets, 
+ * based on a rawText string, a linkCollection array that implements the 
+ * LinkCollection interface, and optionally an imgCollection containing
+ * images to be posted
  * @param {string} rawText Raw text in unicode
  * @param {Array<Link>} linkCollection Array of Link objects that point to specific indices in the raw text
  * 
  * @returns {Promise<BlueskyPost>} a postable Bluesky Post Object
  */
-async function preparePost(rawText: string, linkCollection: Array<Link>): Promise<BlueskyPost> {
+async function preparePost(rawText: string, linkCollection: Array<Link>, imgCollection?: Image[]): Promise<BlueskyPost> {
 	try {
 		log(LogLevel.DEBUG, 'Received raw text:', rawText);
 		log(LogLevel.INFO, 'Creating rich text object...');
@@ -177,16 +179,21 @@ async function preparePost(rawText: string, linkCollection: Array<Link>): Promis
 
 		}
 
-		/*
-		const postRecord = {
-			$type: 'app.bsky.feed.post',
-			text: rt.text,
-			facets: rt.facets,
-			createdAt: new Date().toISOString(),
+		log(LogLevel.TRACE, 'Determined facets:', rt.facets == undefined ? 'undefined' : JSON.stringify(rt.facets, null , 2));
+
+		// create our img embed
+		let embed: AppBskyFeedPost.Record["embed"] = null;
+		if (imgCollection) {
+			embed = {
+				$type: 'app.bsky.embed.images',
+				images: imgCollection
+			};
 		}
-		*/
-		const postRecord = new BlueskyPost(rt.text, rt.facets, new Date().toISOString());
-		log(LogLevel.TRACE, 'Determined facets:', postRecord.facets == undefined ? 'undefined' : JSON.stringify(postRecord.facets, null , 2));
+
+		log(LogLevel.TRACE, 'Determined embed:', embed == undefined ? 'undefined' : JSON.stringify(embed, null , 2));
+
+		// create the post record
+		const postRecord = new BlueskyPost(rt.text, new Date().toISOString(), embed, rt.facets);
 		log(LogLevel.TRACE, 'Prepared post, post record:', JSON.stringify(postRecord, null, 2));
 		return postRecord;
 	} catch (error) {
@@ -212,16 +219,44 @@ async function sanitizeAndPostContent(article: Article, content: Content): Promi
 		const links = stripped["linkCollection"];
 		log(LogLevel.TRACE, 'Stripped text:', rawText);
 
+		// determine if there are images to be posted 
+		// if so, add images to a imgCollection obj
+		let img = null;
+		const imgCollection: Image[] = [];
+		if (content.img) {
+			img = await getBlobFromImgUri(content.img.uri);
+			let res = { 
+				data: {
+					blob: null
+				} 
+			};
+			if (agent) {
+				res = await agent.uploadBlob(img);
+			}
+			const { data } = res;
+			imgCollection.push({
+				image: data.blob,
+				alt: content.img.alt,
+				aspectRatio: {
+					width: content.img.width,
+					height: content.img.height
+				}
+			});
+		}
+		
 		// prepare for posting
-		const postRecord = await preparePost(rawText, links);
+		const postRecord = await preparePost(rawText, links, imgCollection);
 		log(LogLevel.TRACE, 'Prepared post received:', JSON.stringify(postRecord, null, 2));
 		
 		// post to Bluesky			
 		await postToBluesky(postRecord);
 		log(LogLevel.TRACE, 'Content posted:', JSON.stringify(postRecord, null, 2));
 
+		// the article content does not need to be saved
+		// it just needs to be updated to indicate that it has been posted
+		await markArticleContentAsPosted(article, content);
 		// save posted content to article
-		await saveArticleContent(article, content);	
+		//await saveArticleContent(article, content);	
 	} catch (error) {
 		log(LogLevel.ERROR, 'Failed to sanitize post content:', error);
 		return false;		
