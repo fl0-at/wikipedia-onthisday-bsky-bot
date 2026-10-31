@@ -12,19 +12,30 @@ An example post on Bluesky could look something like this:
 
 ## How to run?
 
-Simply run
+You need Node.js and npm. Install the dependencies:
 
 ```shell
 npm install
 ```
 
-and
+For live posting, create a `.env` file in the project root and set your Bluesky handle and an app password:
+
+```dotenv
+BLUESKY_HANDLE=your-bot.bsky.social
+BLUESKY_PASSWORD=your-bluesky-app-password
+```
+
+Do not commit `.env`; it is ignored by Git. Then start the bot:
 
 ```shell
 npm start
 ```
 
-and you should be good to go!
+By default, the bot checks for content every two hours and runs only between 6:00 and 22:00 in the machine's local time zone. See [Environment variables](#environment-variables) to change the schedule and other settings.
+
+To preview posts without logging in or publishing to Bluesky, set `DEBUG_MODE=true` in `.env` and run `npm start`. Debug mode uses `DEBUG_CRON_SCHEDULE` (every 15 seconds by default) instead of the regular schedule.
+
+For development, `npm run build` compiles the TypeScript and `npm run lint` checks `src/`. No automated test suite is configured yet.
 
 ## Environment variables
 
