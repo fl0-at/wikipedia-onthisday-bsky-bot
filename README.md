@@ -18,14 +18,9 @@ You need Node.js and npm. Install the dependencies:
 npm install
 ```
 
-For live posting, create a `.env` file in the project root and set your Bluesky handle and an app password:
+For live posting, copy `.env.example` to `.env` and set your Bluesky handle and an app password:
 
-```dotenv
-BLUESKY_HANDLE=your-bot.bsky.social
-BLUESKY_PASSWORD=your-bluesky-app-password
-```
-
-Do not commit `.env`; it is ignored by Git. Then start the bot:
+The example file includes the optional settings and their defaults. Do not commit `.env`; it is ignored by Git. Then start the bot:
 
 ```shell
 npm start
